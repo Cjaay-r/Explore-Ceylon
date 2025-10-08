@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 06, 2025 at 12:09 PM
+-- Generation Time: Oct 08, 2025 at 09:32 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -41,12 +41,18 @@ CREATE TABLE `bookings` (
   `Number_of_People` int(11) NOT NULL,
   `Booking_Type` enum('customize','Package') NOT NULL,
   `Guide_Preferences` tinyint(1) NOT NULL,
+  `Status` enum('Pending','Confirmed','In_Progress','Completed','Cancelled') NOT NULL,
+  `Completed_At` datetime NOT NULL,
   `Progress` varchar(100) NOT NULL,
   `Price` decimal(10,0) NOT NULL,
+  `Payment_Method` enum('Cash','Online') NOT NULL,
+  `Payment_Status` enum('Paid','Unpaid') NOT NULL,
+  `Driver_earning` decimal(10,0) NOT NULL,
+  `Guide_earning` decimal(10,0) NOT NULL,
   `User_ID` int(11) NOT NULL,
   `Driver_ID` int(11) NOT NULL,
-  `Guide_ID` int(11) NOT NULL,
-  `Package_ID` int(11) NOT NULL
+  `Guide_ID` int(11) DEFAULT NULL,
+  `Package_ID` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -57,6 +63,7 @@ CREATE TABLE `bookings` (
 
 CREATE TABLE `booking_destinations` (
   `Destination_ID` int(11) NOT NULL,
+  `Day` int(11) NOT NULL,
   `Destination` varchar(300) NOT NULL,
   `Booking_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -82,7 +89,8 @@ CREATE TABLE `destinations` (
 --
 
 INSERT INTO `destinations` (`Destination_ID`, `Name`, `Description`, `District`, `latitude`, `longitude`, `User_ID`) VALUES
-(11, 'dote', 'qweqweowqe wowoiuuweqiewq qwiueqoiewiq euwquwqeqw wquiwqiqweu', 'Matale', 8.000000, 81.000000, NULL);
+(11, 'dote', 'qweqweowqe wowoiuuweqiewq qwiueqoiewiq euwquwqeqw wquiwqiqweu', 'Matale', 8.000000, 81.000000, NULL),
+(12, 'admin', 'dsasdsds dsdds sdff', 'Kandy', 8.000000, 81.000000, NULL);
 
 -- --------------------------------------------------------
 
@@ -104,7 +112,10 @@ CREATE TABLE `destination_imgs` (
 INSERT INTO `destination_imgs` (`Image_ID`, `Image_Url`, `AltText`, `Destination_ID`) VALUES
 (19, 'uploads/1757378881_dabulla-5f28ef9a6fde.jpg', 'Photo of dote', 11),
 (21, 'uploads/1757571501_polunna-f72af7eb2eca.webp', 'Photo of dote', 11),
-(22, 'uploads/1758230134_mihin-579cb4447312.webp', 'Photo of dote', 11);
+(22, 'uploads/1758230134_mihin-579cb4447312.webp', 'Photo of dote', 11),
+(23, 'uploads/Destinations/kandy3-77d4ef4c6037.jpg', 'Photo of admin', 12),
+(24, 'uploads/Destinations/kandy1-a57085a0afbd.jpg', 'Photo of admin', 12),
+(25, 'uploads/Destinations/kandy2-7d773ea46482.jpg', 'Photo of admin', 12);
 
 -- --------------------------------------------------------
 
@@ -118,13 +129,14 @@ CREATE TABLE `driver` (
   `L_Name` varchar(200) NOT NULL,
   `NIC_or_Pass` varchar(200) NOT NULL,
   `Description` varchar(400) NOT NULL,
-  `Vehicle_Category` varchar(300) NOT NULL,
+  `Vehicle_Category` enum('Bike','Tuk-Tuk','Mini-Car','Car','Van','Bus') NOT NULL,
   `Vehicle_No` varchar(300) NOT NULL,
   `Fixed_Price` decimal(10,0) NOT NULL,
   `PricePer_Km` decimal(10,0) NOT NULL,
-  `Seating_Capacity` int(11) NOT NULL,
-  `Status` varchar(100) NOT NULL,
-  `Rating` varchar(100) NOT NULL,
+  `Total_Income` decimal(10,0) NOT NULL,
+  `Status` enum('Available','Un_available','On_trip') NOT NULL,
+  `Rating` decimal(10,0) NOT NULL,
+  `Completed_trips` int(11) NOT NULL,
   `User_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -140,18 +152,13 @@ CREATE TABLE `guide` (
   `L_Name` varchar(200) NOT NULL,
   `NIC_or_Pass` varchar(200) NOT NULL,
   `Description` varchar(400) NOT NULL,
-  `Rating` varchar(300) NOT NULL,
-  `Status` varchar(300) NOT NULL,
+  `Price_per_Day` decimal(10,0) NOT NULL,
+  `Rating` decimal(10,0) NOT NULL,
+  `Status` enum('Available','Un_available','On_trip') NOT NULL,
+  `Total_Income` decimal(10,0) NOT NULL,
+  `Completed_trips` int(11) NOT NULL,
   `User_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `guide`
---
-
-INSERT INTO `guide` (`Guide_ID`, `F_Name`, `L_Name`, `NIC_or_Pass`, `Description`, `Rating`, `Status`, `User_ID`) VALUES
-(2, 'qwer1', 'Rajapaksha', '200203290203', '22k wdnwkdw dwjdnwkjd  dwdnjd dwjwdj dwjdw dwdjwd wdkd wdw dwjd', '', 'Available', 11),
-(4, 'sakalabujan', 'kotakalisam', '216143142194', 'sfhbsjfsnjfbsujhf', '', 'Available', 13);
 
 -- --------------------------------------------------------
 
@@ -163,7 +170,7 @@ CREATE TABLE `inquiry` (
   `Inquiry_ID` int(11) NOT NULL,
   `Subject` varchar(300) NOT NULL,
   `Message` varchar(1000) NOT NULL,
-  `Reply` varchar(1000) NOT NULL,
+  `Reply` varchar(1000) DEFAULT NULL,
   `Date&Time` date NOT NULL,
   `User_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -187,14 +194,8 @@ CREATE TABLE `itinerary` (
 --
 
 INSERT INTO `itinerary` (`ItineraryID`, `DayNumber`, `Location`, `Description`, `PackageID`) VALUES
-(113, 1, 'Kadny', 'kadny tour', 18),
-(114, 2, 'kandy', 'kadny test', 19),
-(115, 1, 'Kandy', 'kadny test', 17),
-(118, 1, 'qqqqq', 'qqqqqqqqqqqqqqqqqqq', 24),
-(119, 1, 'kandy', 'Explore Gal Vihara, royal palace ruins, and Parakrama Samudra reservoir. Cycle through archaeological sites and admire ancient engineering.', 25),
-(121, 1, 'kandy', 'ejhdggahdagdhcakdj cabcshcbakcbcsj', 26),
-(122, 1, 'qqqq qqwwquy', 'qweqweowqe wowoiuuweqiewq qwiueqoiewiq euwquwqeqw wquiwqiqweu', 27),
-(123, 2, 'qewqe wqeew', 'qweqweowqe wowoiuuweqiewq qwiueqoiewiq euwquwqeqw wquiwqiqweu', 27);
+(125, 1, 'kandy', 'Step into one of the oldest continuously inhabited cities in the world. Explore enormous dagobas (stupas), the sacred Sri Maha Bodhi tree—grown from a cutting of the original Bodhi tree in India—and ancient monasteries that showcase exquisite stone carvings and inscriptions. Don’t miss the iconic Ruwanwelisaya stupa, an architectural marvel, and the Jetavanaramaya, once one of the tallest brick structures of the ancient world. Cycling or walking through the ruins gives a serene and reflective experience of Sri Lanka’s Buddhist heritage.', 28),
+(126, 1, 'Polonnaruwa', 'Step into one of the oldest continuously inhabited cities in the world. Explore enormous dagobas (stupas), the sacred Sri Maha Bodhi tree—grown from a cutting of the original Bodhi tree in India—and ancient monasteries that showcase exquisite stone carvings and inscriptions. Don’t miss the iconic Ruwanwelisaya stupa, an architectural marvel, and the Jetavanaramaya, once one of the tallest brick structures of the ancient world. Cycling or walking through the ruins gives a serene and reflective experience of Sri Lanka’s Buddhist heritage.', 28);
 
 -- --------------------------------------------------------
 
@@ -206,23 +207,6 @@ CREATE TABLE `language` (
   `ID` int(11) NOT NULL,
   `Language` varchar(300) NOT NULL,
   `Guide_ID` int(11) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `notifications`
---
-
-CREATE TABLE `notifications` (
-  `Notification_ID` int(11) NOT NULL,
-  `Subject` varchar(300) NOT NULL,
-  `Message` varchar(1000) NOT NULL,
-  `Date&Time` date NOT NULL,
-  `User_ID` int(11) NOT NULL,
-  `Booking_ID` int(11) NOT NULL,
-  `Rental_ID` int(11) NOT NULL,
-  `Ticket_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -243,35 +227,11 @@ CREATE TABLE `packageimages` (
 --
 
 INSERT INTO `packageimages` (`ImageID`, `ImageUrl`, `AltText`, `Package_ID`) VALUES
-(53, 'uploads/1759088329_des2.jpg', 'Package Image', 17),
-(54, 'uploads/1759088329_des3.jpg', 'Package Image', 17),
-(55, 'uploads/1759088329_WhatsApp_Image_2025-09-28_at_01.55.51_6500977d.jpg', 'Package Image', 17),
-(56, 'uploads/1759091211_des2.jpg', 'Package Image', 18),
-(57, 'uploads/1759091211_des3.jpg', 'Package Image', 18),
-(58, 'uploads/1759091211_WhatsApp_Image_2025-09-28_at_01.55.51_6500977d.jpg', 'Package Image', 18),
-(59, 'uploads/1759093921_des2.jpg', 'Package Image', 19),
-(60, 'uploads/1759093921_des3.jpg', 'Package Image', 19),
-(61, 'uploads/1759093921_WhatsApp_Image_2025-09-28_at_01.55.51_6500977d.jpg', 'Package Image', 19),
-(66, 'uploads/Packages/1759521045_1758230354_dabulla.jpg', 'Package Image', 24),
-(67, 'uploads/Packages/1759521045_1758230354_mihin.webp', 'Package Image', 24),
-(68, 'uploads/Packages/1759521045_1758230354_polunna.webp', 'Package Image', 24),
-(69, 'uploads/Packages/1759521045_1758260488_anura.jpg', 'Package Image', 24),
-(70, 'uploads/Packages/1759521350_1757420593_polunna.webp', 'Package Image', 25),
-(71, 'uploads/Packages/1759521350_1758230354_polunna.webp', 'Package Image', 25),
-(72, 'uploads/Packages/1759521350_1758260488_dabulla.jpg', 'Package Image', 25),
-(73, 'uploads\\Packages/1759521796_1757374640_trinco1.jpg', 'Package Image', 26),
-(74, 'uploads\\Packages/1759521796_1757378881_polunna.webp', 'Package Image', 26),
-(75, 'uploads\\Packages/1759521796_1757378881_sigiriya1.jpg', 'Package Image', 26),
-(76, 'uploads\\Packages/1759521796_1757379702_2.jpg', 'Package Image', 26),
-(77, 'uploads\\Packages/1759521796_1757420593_polunna.webp', 'Package Image', 26),
-(78, 'uploads/Packages/1759522077_1757378881_sigiriya1.jpg', 'Package Image', 26),
-(79, 'uploads/Packages/1759522077_1757379702_2.jpg', 'Package Image', 26),
-(80, 'uploads/Packages/1759522077_1757420593_polunna.webp', 'Package Image', 26),
-(81, 'uploads/Packages/1759522077_1757571501_2.jpg', 'Package Image', 26),
-(82, 'uploads/1759525329_1757378881_anura.jpg', 'Package Image', 27),
-(83, 'uploads/1759525329_1757378881_dabulla.jpg', 'Package Image', 27),
-(84, 'uploads/1759525329_1757378881_kandy1.jpg', 'Package Image', 27),
-(85, 'uploads/1759525329_1757378881_mihin.webp', 'Package Image', 27);
+(91, 'uploads/Packages/1759664721_safari.jpg', 'Package Image', 28),
+(92, 'uploads/Packages/1759664721_Scenic-Sri-Lanka-Desktop-image.jpg', 'Package Image', 28),
+(93, 'uploads/Packages/1759664721_Sigiriya_Rock_Fortress.jpg', 'Package Image', 28),
+(94, 'uploads/Packages/1759664721_sri-lanka.jpg', 'Package Image', 28),
+(95, 'uploads/Packages/1759664721_walking.jpg', 'Package Image', 28);
 
 -- --------------------------------------------------------
 
@@ -296,16 +256,7 @@ CREATE TABLE `packages` (
 --
 
 INSERT INTO `packages` (`Package_ID`, `Name`, `Subtitle`, `Description`, `Long_Des`, `DurationDays`, `Price`, `Root_img`, `User_ID`) VALUES
-(17, 'test package', 'sub title check', 'description check check skdhsdjhkdsjd dshdksdsdhsd dsdjdsdd dsjdhksjdd sdshd dsdjhdsjkdsd djshkd', 'this is long description shjdsjdhsdjhd', 5, 200.00, 'uploads/1759088329_des2.jpg', 1),
-(18, 'another name', 'subtitel chekc', 'short desc', 'long desc test', 4, 200.00, 'uploads/1759091211_Final_Project_ER.jpg', 1),
-(19, 'agaga', 'asasnbsa', 'asamam,sna,msnsa,msba,sans,qmasnsa', 'tgggffvg jhnhbnb jmnbb  jkkkk,', 3, 2222.00, 'uploads/1759093921_Final_Project_ER.jpg', 1),
-(20, 'Pavith Rajapaksha', 'eeeee', 'sesfffsff', '44444', 4, 444.00, 'uploads/1759093956_des3.jpg', 1),
-(21, 'pavith', 'qwqqw', 'sdsdsdsd dsdsds dsdsdsds', 'fdsgdfgdfg dgdfgd gdfg dgdffgfgd dfgf', 1, 1000.00, 'uploads/1759094019_Error500.jpg', 1),
-(22, 'jack', 'ggdgdfd gfg dfgfd dgd d gdf g', 'flgdfgdkl gfdg fdkgflkgdjfdlkg', 'vghvgvg hgfhggv hgfg hgfgf', 2, 46678.00, 'uploads/1759094082_des3.jpg', 1),
-(24, 'admin', 'asdf', 'adadssda', 'ssadasdadad', 2, 2212.00, 'uploads/Packages/1759521045_1757373151_kandy3.jpg', 1),
-(25, 'Charana', 'asdf', 'adadssda', 'ssadasdadad', 2, 2212.00, 'uploads/Packages/1759521350_1758677890_IMG-20240828-WA0011.jpg', 1),
-(26, '1111111', 'asdf', 'adadssda', 'ssadasdadad', 2, 2212.00, 'uploads/Packages/1759522077_1757373151_kandy3.jpg', 1),
-(27, 'admin', 'asdf', 'adadssda', 'ssadasdadad', 2, 2212.00, 'uploads/1759525329_1757571501_polunna.webp', 1);
+(28, 'admin', 'asdndsbsmnd', 'adkds dsjkdsd dkdhsjds sdksudsdn dskdsndskjd djksdhskjd dsjdhdsd sdjkds sdjnsd sm dsijdsd s dkljdnsd  djssnbdsds ddjsds,d dsadkjnsd', 'adkds dsjkdsd dkdhsjds sdksudsdn dskdsndskjd djksdhskjd dsjdhdsd sdjkds sdjnsd sm dsijdsd s dkljdnsd  djssnbdsds ddjsds,d dsadkjnsd adkds dsjkdsd dkdhsjds sdksudsdn dskdsndskjd djksdhskjd dsjdhdsd sdjkds sdjnsd sm dsijdsd s dkljdnsd  djssnbdsds ddjsds,d dsadkjnsd adkds dsjkdsd dkdhsjds sdksudsdn dskdsndskjd djksdhskjd dsjdhdsd sdjkds sdjnsd sm dsijdsd s dkljdnsd  djssnbdsds ddjsds,d dsadkjnsd adkds dsjkdsd dkdhsjds sdksudsdn dskdsndskjd djksdhskjd dsjdhdsd sdjkds sdjnsd sm dsijdsd s dkljdnsd  djssnbdsds ddjsds,d dsadkjnsd', 2, 40000.00, 'uploads/Packages/1759664721_kandy1.jpg', 1);
 
 -- --------------------------------------------------------
 
@@ -318,6 +269,41 @@ CREATE TABLE `review` (
   `Review` int(100) NOT NULL,
   `User_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `tickets`
+--
+
+CREATE TABLE `tickets` (
+  `Ticket_ID` int(11) NOT NULL,
+  `Name` varchar(300) NOT NULL,
+  `Contact_No` int(11) NOT NULL,
+  `Destination` varchar(300) NOT NULL,
+  `Category` enum('Cultural','Nature','Wildlife','zoos','Museum') NOT NULL,
+  `No_Of_People` int(11) NOT NULL,
+  `Purchased_Date` datetime NOT NULL,
+  `Valid_Date` date NOT NULL,
+  `Total_Price` decimal(10,0) NOT NULL,
+  `Qr` varchar(300) NOT NULL,
+  `User_ID` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `tickets`
+--
+
+INSERT INTO `tickets` (`Ticket_ID`, `Name`, `Contact_No`, `Destination`, `Category`, `No_Of_People`, `Purchased_Date`, `Valid_Date`, `Total_Price`, `Qr`, `User_ID`) VALUES
+(6, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:49:41', '2025-10-10', 1500, 'QR_68e5a00dcff7e', 1),
+(7, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:53:56', '2025-10-10', 1500, 'QR_68e5a10c9d32b', 1),
+(8, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:54:38', '2025-10-10', 1500, 'QR_68e5a136bdc82', 1),
+(9, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 05:01:33', '2025-10-10', 1500, 'QR_68e5a2d5b104c', 1),
+(10, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 05:02:30', '2025-10-10', 1500, 'QR_68e5a30ece554', 1),
+(11, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Sinharaja Forest Reserve', 'Nature', 4, '2025-10-08 18:20:25', '2025-10-10', 8000, 'QR_68e65e11d6b54', 1),
+(12, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Colombo National Museum', 'Museum', 4, '2025-10-08 23:31:48', '2025-10-10', 4800, 'QR_68e6a70c4874a', 1),
+(13, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Seethawaka Botanical Garden', 'Nature', 4, '2025-10-08 23:32:32', '2025-10-10', 8000, 'QR_68e6a7386d5c6', 1),
+(14, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Mirijjawila Dry Zone Botanical Garden', 'Nature', 4, '2025-10-08 23:33:37', '2025-10-10', 8000, 'QR_68e6a779b2f9e', 1);
 
 -- --------------------------------------------------------
 
@@ -348,12 +334,10 @@ INSERT INTO `user` (`User_ID`, `Username`, `Email`, `Password`, `Phone_No`, `Use
 (6, 'test3', 'test2@gmail.com', '$2y$10$ehScBSn/KF6OzAoTzcuOmuNkbgkPHTr/TxkX7U/IeTPn.0B5dQa5a', '0713704931', 'default.png', 'User'),
 (7, 'Admin', 'admin@gmail.com', '$2y$10$7YIKJBbRPDjgi3b4gE5hZOHp8lzqHWjfcDQ2M6GI/PG7UljhA.cqi', '0713704931', 'default.png', 'Admin'),
 (8, 'cj', 'cj@gmail.com', '$2y$10$815MynSXyWAKO4pi8/tdM.4HP.1K8kw0GlXkeK6ntCOqtiT1Ol.W2', '+94 71 370 4931', '1759586133_images-removebg-preview.png', 'User'),
-(9, 'asasas', 'asass@gmaiul.com', '$2y$10$TnNdlE4uIvYJCJMWnYGMXeL5fN29OB2gnSNN7syIq69DkNpLmJK0W', 'asss', 'uploads/UserProfiles/user_1759742869_3e5efe860262.jpg', 'User'),
-(10, 'qwer', 'qwer1@gmail.com', '$2y$10$9TinBngu8EDDqYeHGy.qEOx6L7bPJ.9maMYN4e7/hUen2ENoqBKpa', '0713704941', '/uploads/UserProfiles/user_1759737268_b374f8fabdc3.jpg', 'Guide'),
-(11, 'qwer', 'qwer1@gmail.com', '$2y$10$7iPCiZbk204v4K.sJHkIW..hp5VY787OE4M8KnOLyNYKE2kRU0Rqy', '0713704941', '/uploads/UserProfiles/user_1759741623_f4e1a25f45cd.jpg', 'Guide'),
-(12, 'bujan', 'bujan@gmail.com', '$2y$10$jYtpO7rlW/o4jCPWn/v.9eWHwnHqKLmdh0ci9DuDqDN5B3RKkhzx2', '0775586954', '/uploads/UserProfiles/user_1759741693_e62ea199102a.jpg', 'Guide'),
-(13, 'bujan', 'bujan@gmail.com', '$2y$10$8gmY1wWiFHMhKxK6r3kcg.iH3bxUjIqOga/DG0S3MND68mGODGkYa', '0775586954', '1759742194_5fa971e44db2_IMG_5746.jpg', 'Guide'),
-(14, 'kenul bus driver', 'kenul@gmail.com', '$2y$10$0rRTiJPTqJu5j5ois9ylMOcu4rMXncvAysMUoWHixM.9xC0XGvSjW', '0775486542', '1759742835_d0b8addfdafc_des2.jpg', 'Driver');
+(9, 'cj2', 'cj2@gmail.com', '$2y$10$aV9..X6Fh0Y.0Olz69APr.JLlKifnNWf4y0RLu/6Ld7KurodtbMVO', '0713704931', '1759663148_download.png', 'User'),
+(10, 'cj3', 'cj3@gmail.com', '$2y$10$mhIJg86OJttpCHl4Nhn1cO3z8pPRVe5Ycy.E3dYV.OjBM2vqvuHHm', '0713704931', 'uploads/UserProfiles/user_1759735226_2edd809c341c.webp', 'User'),
+(12, 'Saman', 'saman@gmail.com', '$2y$10$D/gdW0uNVnD2nF16/bCOO.QjkLuGgNV3YCWPcjhNH3CVlYLbb4Wa.', '+94 71 370 4931', '', 'Driver'),
+(13, 'Saman', 'kasun@gmail.com', '$2y$10$WNSsqkNOw75LtbXAY0o6L.UOFGvyYOSuE3gS7B7B7GnweO06d8EZ2', '+94 71 370 4931', 'uploads/UserProfiles/user_1759735203_b373f275e2ec.jpg', 'Guide');
 
 -- --------------------------------------------------------
 
@@ -383,7 +367,8 @@ INSERT INTO `vehicle` (`Vehicle_ID`, `Category`, `Price_Per_Day`, `Seating_Capac
 (14, 'Bike', '3000', 2, 'ABG-2992', 'Available', 1),
 (15, 'Bike', '3000', 2, 'ATG-3899', 'Available', 1),
 (16, 'Mini_Car', '7000', 4, 'OKO-7788', 'Available', 1),
-(17, 'Mini_Car', '7000', 4, 'ZCV-0099', 'Available', 1);
+(17, 'Mini_Car', '7000', 4, 'ZCV-0099', 'Available', 1),
+(18, 'Tuk', '4000', 3, 'qwe 2020', 'Available', 7);
 
 -- --------------------------------------------------------
 
@@ -396,7 +381,7 @@ CREATE TABLE `vehicle_rentals` (
   `Name` varchar(300) NOT NULL,
   `Email` varchar(300) NOT NULL,
   `NIC_or_Pass` varchar(300) NOT NULL,
-  `Phone_No` int(11) NOT NULL,
+  `Phone_No` varchar(300) NOT NULL,
   `Start_Date` date NOT NULL,
   `End_Date` date NOT NULL,
   `Start_Location` varchar(300) NOT NULL,
@@ -409,14 +394,14 @@ CREATE TABLE `vehicle_rentals` (
 --
 
 INSERT INTO `vehicle_rentals` (`Rental_ID`, `Name`, `Email`, `NIC_or_Pass`, `Phone_No`, `Start_Date`, `End_Date`, `Start_Location`, `Vehicle_ID`, `User_ID`) VALUES
-(14, 'test1', 'mandirachamath@gmail.com', '200629101137', 713704931, '2025-09-21', '2025-09-22', 'kandy', 10, 1),
-(15, 'test2', 'mandirachamath@gmail.com', '200629101137', 713704931, '2025-09-21', '2025-09-22', 'kandy', 11, 1),
-(16, 'test3', 'mandirachamath@gmail.com', '200629101137', 713704931, '2025-09-21', '2025-09-22', 'kandy', 12, 1),
-(17, 'test4', 'mandirachamath@gmail.com', '200629101137', 713704931, '2025-09-21', '2025-09-22', 'kandy', 13, 1),
-(18, 'test5', 'mandirachamath@gmail.com', '200629101137', 713704931, '2025-09-23', '2025-09-24', 'kandy', 10, 1),
-(19, 'test6', 'mandirachamath@gmail.com', '200629101137', 713704931, '2025-09-23', '2025-09-24', 'kandy', 11, 1),
-(20, 'test7', 'mandirachamath@gmail.com', '200629101137', 713704931, '2025-09-23', '2025-09-24', 'kandy', 12, 1),
-(21, 'kaushal', 'kaushal@gmail.com', '200629101137', 773538444, '2025-09-24', '2025-09-24', 'kandy', 14, 1);
+(14, 'test1', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 10, 1),
+(15, 'test2', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 11, 1),
+(16, 'test3', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 12, 1),
+(17, 'test4', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 13, 1),
+(18, 'test5', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 10, 1),
+(19, 'test6', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 11, 1),
+(20, 'test7', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 12, 1),
+(21, 'kaushal', 'kaushal@gmail.com', '200629101137', '773538444', '2025-09-24', '2025-09-24', 'kandy', 14, 1);
 
 --
 -- Indexes for dumped tables
@@ -495,12 +480,6 @@ ALTER TABLE `language`
   ADD KEY `Guide_ID` (`Guide_ID`);
 
 --
--- Indexes for table `notifications`
---
-ALTER TABLE `notifications`
-  ADD PRIMARY KEY (`Notification_ID`);
-
---
 -- Indexes for table `packageimages`
 --
 ALTER TABLE `packageimages`
@@ -520,6 +499,13 @@ ALTER TABLE `packages`
 -- Indexes for table `review`
 --
 ALTER TABLE `review`
+  ADD KEY `User_ID` (`User_ID`);
+
+--
+-- Indexes for table `tickets`
+--
+ALTER TABLE `tickets`
+  ADD PRIMARY KEY (`Ticket_ID`),
   ADD KEY `User_ID` (`User_ID`);
 
 --
@@ -568,25 +554,25 @@ ALTER TABLE `booking_destinations`
 -- AUTO_INCREMENT for table `destinations`
 --
 ALTER TABLE `destinations`
-  MODIFY `Destination_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `Destination_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `destination_imgs`
 --
 ALTER TABLE `destination_imgs`
-  MODIFY `Image_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `Image_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `driver`
 --
 ALTER TABLE `driver`
-  MODIFY `Driver_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `Driver_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `guide`
 --
 ALTER TABLE `guide`
-  MODIFY `Guide_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `Guide_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `inquiry`
@@ -598,7 +584,7 @@ ALTER TABLE `inquiry`
 -- AUTO_INCREMENT for table `itinerary`
 --
 ALTER TABLE `itinerary`
-  MODIFY `ItineraryID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=124;
+  MODIFY `ItineraryID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=127;
 
 --
 -- AUTO_INCREMENT for table `language`
@@ -607,34 +593,34 @@ ALTER TABLE `language`
   MODIFY `ID` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- AUTO_INCREMENT for table `notifications`
---
-ALTER TABLE `notifications`
-  MODIFY `Notification_ID` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- AUTO_INCREMENT for table `packageimages`
 --
 ALTER TABLE `packageimages`
-  MODIFY `ImageID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=86;
+  MODIFY `ImageID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=96;
 
 --
 -- AUTO_INCREMENT for table `packages`
 --
 ALTER TABLE `packages`
-  MODIFY `Package_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
+  MODIFY `Package_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
+
+--
+-- AUTO_INCREMENT for table `tickets`
+--
+ALTER TABLE `tickets`
+  MODIFY `Ticket_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `user`
 --
 ALTER TABLE `user`
-  MODIFY `User_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `User_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `vehicle`
 --
 ALTER TABLE `vehicle`
-  MODIFY `Vehicle_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `Vehicle_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `vehicle_rentals`
@@ -720,6 +706,12 @@ ALTER TABLE `packages`
 --
 ALTER TABLE `review`
   ADD CONSTRAINT `review_ibfk_1` FOREIGN KEY (`User_ID`) REFERENCES `user` (`User_ID`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `tickets`
+--
+ALTER TABLE `tickets`
+  ADD CONSTRAINT `tickets_ibfk_1` FOREIGN KEY (`User_ID`) REFERENCES `user` (`User_ID`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `vehicle`
