@@ -14,21 +14,21 @@ $stmt->bind_param("i", $uid);
 $stmt->execute();
 $res = $stmt->get_result();
 $u = $res->fetch_assoc();
-if (!$u || strcasecmp($u['User_Type'], 'Admin') !== 0) {
+if (!$u || strcasecmp((string)$u['User_Type'], 'Admin') !== 0) {
     http_response_code(403);
     echo "Forbidden";
     exit;
 }
-function quickCountMySQLi(mysqli $conn, string $sql): int {
-    $q = $conn->query($sql);
-    $row = $q->fetch_row();
-    return (int)$row[0];
+function count_table(mysqli $conn, string $sql): int {
+    $r = $conn->query($sql);
+    if ($r && ($row = $r->fetch_row())) return (int)$row[0];
+    return 0;
 }
-$destinationsCount = quickCountMySQLi($conn, "SELECT COUNT(*) FROM destinations");
-$packagesCount     = quickCountMySQLi($conn, "SELECT COUNT(*) FROM packages");
-$guidesCount       = quickCountMySQLi($conn, "SELECT COUNT(*) FROM guide");
-$driversCount      = quickCountMySQLi($conn, "SELECT COUNT(*) FROM driver");
-$customersCount    = quickCountMySQLi($conn, "SELECT COUNT(*) FROM user WHERE User_Type = 'User'");
+$destinationsCount = count_table($conn, "SELECT COUNT(*) FROM destinations");
+$packagesCount     = count_table($conn, "SELECT COUNT(*) FROM packages");
+$guidesCount       = count_table($conn, "SELECT COUNT(*) FROM guide");
+$driversCount      = count_table($conn, "SELECT COUNT(*) FROM driver");
+$customersCount    = count_table($conn, "SELECT COUNT(*) FROM user WHERE LOWER(User_Type) = 'user'");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -42,19 +42,8 @@ $customersCount    = quickCountMySQLi($conn, "SELECT COUNT(*) FROM user WHERE Us
   <link rel="stylesheet" href="../Styles/AdminDashboard.css"/>
 </head>
 <body>
-  <div class="wrap">
-    <nav class="sidebar">
-      <div class="brand">Admin Panel</div>
-      <ul class="menu">
-        <li><a class="active" href="AdminDashboard.php"><span class="ico">⚡</span><span>Dashboard</span></a></li>
-        <li><a href="ManagePackages.php"><span class="ico">🧳</span><span>Manage Packages</span></a></li>
-        <li><a href="ManageDestinations.php"><span class="ico">📍</span><span>Manage Destinations</span></a></li>
-        <li><a href="ManageGuides.php"><span class="ico">🧭</span><span>Manage Guides</span></a></li>
-        <li><a href="ManageDrivers.php"><span class="ico">🚗</span><span>Manage Drivers</span></a></li>
-        <li><a href="ManageUsers.php"><span class="ico">👥</span><span>Manage Users</span></a></li>
-      </ul>
-      <div class="foot">Explore Ceylon</div>
-    </nav>
+
+  <?php require __DIR__ . '/header.php'; ?>
 
     <main class="main">
       <header class="topbar">
@@ -72,7 +61,7 @@ $customersCount    = quickCountMySQLi($conn, "SELECT COUNT(*) FROM user WHERE Us
           <div class="card-ico badge blue">📍</div>
           <div class="card-body">
             <div class="label">Destinations</div>
-            <div class="value" data-count="<?= htmlspecialchars($destinationsCount) ?>">0</div>
+            <div class="value" data-count="<?php echo (int)$destinationsCount; ?>">0</div>
           </div>
         </div>
 
@@ -80,7 +69,7 @@ $customersCount    = quickCountMySQLi($conn, "SELECT COUNT(*) FROM user WHERE Us
           <div class="card-ico badge green">🧳</div>
           <div class="card-body">
             <div class="label">Packages</div>
-            <div class="value" data-count="<?= htmlspecialchars($packagesCount) ?>">0</div>
+            <div class="value" data-count="<?php echo (int)$packagesCount; ?>">0</div>
           </div>
         </div>
 
@@ -88,7 +77,7 @@ $customersCount    = quickCountMySQLi($conn, "SELECT COUNT(*) FROM user WHERE Us
           <div class="card-ico badge cyan">🧭</div>
           <div class="card-body">
             <div class="label">Guides</div>
-            <div class="value" data-count="<?= htmlspecialchars($guidesCount) ?>">0</div>
+            <div class="value" data-count="<?php echo (int)$guidesCount; ?>">0</div>
           </div>
         </div>
 
@@ -96,7 +85,7 @@ $customersCount    = quickCountMySQLi($conn, "SELECT COUNT(*) FROM user WHERE Us
           <div class="card-ico badge amber">🚗</div>
           <div class="card-body">
             <div class="label">Drivers</div>
-            <div class="value" data-count="<?= htmlspecialchars($driversCount) ?>">0</div>
+            <div class="value" data-count="<?php echo (int)$driversCount; ?>">0</div>
           </div>
         </div>
 
@@ -104,19 +93,19 @@ $customersCount    = quickCountMySQLi($conn, "SELECT COUNT(*) FROM user WHERE Us
           <div class="card-ico badge gray">👥</div>
           <div class="card-body">
             <div class="label">Customers</div>
-            <div class="value" data-count="<?= htmlspecialchars($customersCount) ?>">0</div>
+            <div class="value" data-count="<?php echo (int)$customersCount; ?>">0</div>
           </div>
         </div>
       </section>
 
       <section class="quicklinks">
-        <a class="qbtn outline" href="manage_packages.php">Add / Manage Packages</a>
-        <a class="qbtn outline" href="manage_destinations.php">Add / Manage Destinations</a>
-        <a class="qbtn outline" href="manage_users.php">Manage Users</a>
+        <a class="qbtn outline" href="ManagePackages.php">Add / Manage Packages</a>
+        <a class="qbtn outline" href="ManageDestinations.php">Add / Manage Destinations</a>
+        <a class="qbtn outline" href="ManageUsers.php">Manage Users</a>
       </section>
     </main>
+
   </div>
-  
 
   <script>
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -152,6 +141,6 @@ $customersCount    = quickCountMySQLi($conn, "SELECT COUNT(*) FROM user WHERE Us
       });
     }
   </script>
-  
-  </body>
-  </html>
+
+</body>
+</html>
