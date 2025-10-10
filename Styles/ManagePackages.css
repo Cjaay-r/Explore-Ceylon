@@ -1,0 +1,21 @@
+body{background-color:#f3f4f6}
+.navbar{background-color:#1f2937!important}
+.navbar .brand-note{color:#cbd5e1;font-size:.9rem}
+.card{border-color:#e5e7eb}
+.card .card-header{background:#ffffff;border-bottom-color:#e5e7eb;font-weight:600}
+.table>:not(caption)>*>*{padding:.6rem .75rem}
+.form-label{font-weight:600}
+.img-thumb{max-height:90px;border-radius:.375rem;border:1px solid #e5e7eb}
+.muted{color:#6b7280}
+.g-note{font-size:.875rem;color:#6b7280}
+
+:root{--panel:#ffffff;--panel-2:#f9fafc;--text:#1e1e2c;--muted:#5b6576;--primary:#f29f67;--blue:#3b8ff3;--radius:16px;--shadow:0 10px 24px rgba(15,23,42,.06),0 2px 6px rgba(2,6,23,.06)}
+*{box-sizing:border-box}
+
+.main{padding:24px}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:10px}
+
+@media (max-width: 992px){
+  td[class*="text-nowrap"]{white-space:normal!important}
+  td[class*="text-nowrap"] form{display:block;margin-top:6px}
+}
