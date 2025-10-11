@@ -4,6 +4,7 @@ session_start();
 require_once __DIR__ . '/Includes/config.php';
 require_once __DIR__ . '/Includes/dbconnect.php';
 require_once __DIR__ . '/Includes/auth.php';
+require_once __DIR__ . '/Includes/stripe.php';
 
 if (!function_exists('isLoggedIn') ? !isset($_SESSION['User_ID']) : !isLoggedIn()) {
   header('Location: ' . (function_exists('url') ? url('login.php') : 'login.php'));
@@ -13,30 +14,14 @@ if (!function_exists('isLoggedIn') ? !isset($_SESSION['User_ID']) : !isLoggedIn(
 $uid = (int)$_SESSION['User_ID'];
 $redirectUrl = function_exists('url') ? url('packages.php') : 'packages.php';
 
-$packageId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-$package = null; $itinerary = [];
+// absolute base URL for redirects back from Stripe
+$APP_BASE = 'http://localhost/ceylon';
 
-if ($packageId > 0) {
-  $ps = $conn->prepare("SELECT Package_ID, Name, Subtitle, Long_Des, DurationDays, Price, Root_img FROM packages WHERE Package_ID=?");
-  $ps->bind_param("i", $packageId);
-  $ps->execute();
-  $package = $ps->get_result()->fetch_assoc();
-  $ps->close();
-
-  $its = $conn->prepare("SELECT DayNumber, Location, Description FROM itinerary WHERE PackageID=? ORDER BY DayNumber ASC");
-  $its->bind_param("i", $packageId);
-  $its->execute();
-  $ir = $its->get_result();
-  while ($row = $ir->fetch_assoc()) $itinerary[] = $row;
-  $its->close();
-}
-
-function vehicle_caps() {
-  return ["Bike"=>1,"Tuk-Tuk"=>2,"Mini-Car"=>3,"Car"=>4,"Van"=>7,"Bus"=>30];
-}
-function allowed_cats($heads) {
-  $out=[]; foreach (vehicle_caps() as $k=>$v) if ($v >= $heads) $out[$k]=$v; return $out;
-}
+/* ────────────────────────────────────────────────────────────────────────────
+   Helpers
+──────────────────────────────────────────────────────────────────────────── */
+function vehicle_caps() { return ["Bike"=>1,"Tuk-Tuk"=>2,"Mini-Car"=>3,"Car"=>4,"Van"=>7,"Bus"=>30]; }
+function allowed_cats($heads) { $out=[]; foreach (vehicle_caps() as $k=>$v) if ($v >= $heads) $out[$k]=$v; return $out; }
 function have_overlap($conn, $col, $id, $start, $end) {
   $q = $conn->prepare("SELECT 1 FROM bookings WHERE $col=? AND Status NOT IN ('Cancelled','Completed') AND NOT (End_Date_Time < ? OR Start_Date_Time > ?) LIMIT 1");
   $q->bind_param("iss", $id, $start, $end);
@@ -56,25 +41,48 @@ function pick_driver($conn, $vehicleCat, $start, $end) {
   $res = $ds->get_result();
   while ($dr = $res->fetch_assoc()) {
     $did = (int)$dr['did'];
-    if (!have_overlap($conn, "Driver_ID", $did, $start, $end)) {
-      $ds->close();
-      return $did;
-    }
+    if (!have_overlap($conn, "Driver_ID", $did, $start, $end)) { $ds->close(); return $did; }
   }
   $ds->close();
   return 0;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+   Load package + itinerary
+──────────────────────────────────────────────────────────────────────────── */
+$packageId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$package = null; $itinerary = [];
+
+if ($packageId > 0) {
+  $ps = $conn->prepare("SELECT Package_ID, Name, Subtitle, Long_Des, DurationDays, Price, Root_img FROM packages WHERE Package_ID=?");
+  $ps->bind_param("i", $packageId);
+  $ps->execute();
+  $package = $ps->get_result()->fetch_assoc();
+  $ps->close();
+
+  $its = $conn->prepare("SELECT DayNumber, Location, Description FROM itinerary WHERE PackageID=? ORDER BY DayNumber ASC");
+  $its->bind_param("i", $packageId);
+  $its->execute();
+  $ir = $its->get_result();
+  while ($row = $ir->fetch_assoc()) $itinerary[] = $row;
+  $its->close();
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   AJAX: Guides filter by dates
+──────────────────────────────────────────────────────────────────────────── */
 if (isset($_GET['action']) && $_GET['action']==='guides') {
   header('Content-Type: application/json');
   $pid = isset($_GET['package_id']) ? (int)$_GET['package_id'] : 0;
   $start = $_GET['start'] ?? '';
+
   $ps = $conn->prepare("SELECT DurationDays FROM packages WHERE Package_ID=?");
   $ps->bind_param("i", $pid);
   $ps->execute();
   $pkg = $ps->get_result()->fetch_assoc();
   $ps->close();
   if (!$pkg) { ob_clean(); echo json_encode(["ok"=>false,"html"=>""]); exit; }
+
   $sd = DateTime::createFromFormat('Y-m-d', $start);
   if (!$sd) { ob_clean(); echo json_encode(["ok"=>true,"html"=>""]); exit; }
   $ed = clone $sd; $ed->modify(((int)$pkg['DurationDays'] - 1) . " days"); $end = $ed->format('Y-m-d');
@@ -109,9 +117,29 @@ if (isset($_GET['action']) && $_GET['action']==='guides') {
   ob_clean(); echo json_encode(["ok"=>true,"html"=>$html]); exit;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+   Stripe return: mark as paid (with CSRF-ish token)
+──────────────────────────────────────────────────────────────────────────── */
+if (isset($_GET['paid']) && $_GET['paid']=='1' && isset($_GET['tok']) && isset($_SESSION['pkg_pay_token']) && hash_equals($_SESSION['pkg_pay_token'], $_GET['tok'])) {
+  $_SESSION['pkg_paid_ok'] = 1;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Handle POST (two steps: pay | submit)
+──────────────────────────────────────────────────────────────────────────── */
 if ($_SERVER['REQUEST_METHOD']==='POST') {
   $isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH'])==='xmlhttprequest';
+  $step = $_POST['__step'] ?? 'submit';
 
+  $out = function($arr) use ($isAjax, $redirectUrl) {
+    if ($isAjax) {
+      header('Content-Type: application/json'); ob_clean(); echo json_encode($arr); exit;
+    } else {
+      header('Location: '.($arr['redirect'] ?? $redirectUrl)); exit;
+    }
+  };
+
+  // Collect inputs
   $packageId = (int)($_POST['Package_ID'] ?? 0);
   $f = trim($_POST['F_Name'] ?? "");
   $l = trim($_POST['L_Name'] ?? "");
@@ -126,81 +154,113 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   $chosenVehicle = trim($_POST['Vehicle_Category'] ?? "");
   $payMethod = ($_POST['Payment_Method'] ?? 'Cash') === 'Online' ? 'Online' : 'Cash';
 
-  $resp = ["ok"=>false,"msg"=>"","redirect"=>$redirectUrl];
-
+  // Fetch package price/duration
   $ps = $conn->prepare("SELECT DurationDays, Price FROM packages WHERE Package_ID=?");
   $ps->bind_param("i", $packageId);
   $ps->execute();
   $pkg = $ps->get_result()->fetch_assoc();
   $ps->close();
-  if (!$pkg) { $resp["msg"]="Invalid package."; if($isAjax){ header('Content-Type:application/json'); ob_clean(); echo json_encode($resp); exit; } }
 
+  if (!$pkg) { $out(["ok"=>false,"msg"=>"Invalid package.","redirect"=>$redirectUrl]); }
   $duration = (int)$pkg['DurationDays'];
   $price = (float)$pkg['Price'];
-  $sd = DateTime::createFromFormat('Y-m-d', $startDate);
-  if (!$sd) { $resp["msg"]="Invalid start date."; if($isAjax){ header('Content-Type:application/json'); ob_clean(); echo json_encode($resp); exit; } }
 
+  $sd = DateTime::createFromFormat('Y-m-d', $startDate);
+  if (!$sd) { $out(["ok"=>false,"msg"=>"Invalid start date.","redirect"=>$redirectUrl]); }
   $ed = clone $sd; $ed->modify(($duration - 1) . " days"); $endDate = $ed->format('Y-m-d');
+
+  // Validations (shared)
   $totalHeads = max(1,$people) + 1;
   $allowed = allowed_cats($totalHeads);
-  if (!isset($allowed[$chosenVehicle])) { $resp["msg"]="Selected vehicle not suitable for group size."; if($isAjax){ header('Content-Type:application/json'); ob_clean(); echo json_encode($resp); exit; } }
-
-  if ($chosenGuideId<=0) { $resp["msg"]="Please select a guide."; if($isAjax){ header('Content-Type:application/json'); ob_clean(); echo json_encode($resp); exit; } }
-  if (have_overlap($conn,"Guide_ID",$chosenGuideId,$startDate,$endDate)) { $resp["msg"]="Guide is busy for these dates."; if($isAjax){ header('Content-Type:application/json'); ob_clean(); echo json_encode($resp); exit; } }
-
+  if (!isset($allowed[$chosenVehicle])) { $out(["ok"=>false,"msg"=>"Selected vehicle not suitable for group size.","redirect"=>$redirectUrl]); }
+  if ($chosenGuideId<=0) { $out(["ok"=>false,"msg"=>"Please select a guide.","redirect"=>$redirectUrl]); }
+  if (have_overlap($conn,"Guide_ID",$chosenGuideId,$startDate,$endDate)) { $out(["ok"=>false,"msg"=>"Guide is busy for these dates.","redirect"=>$redirectUrl]); }
   $driverId = pick_driver($conn, $chosenVehicle, $startDate, $endDate);
-  if ($driverId===0) { $resp["msg"]="No available driver for the selected vehicle."; if($isAjax){ header('Content-Type:application/json'); ob_clean(); echo json_encode($resp); exit; } }
-  if (have_overlap($conn,"Driver_ID",$driverId,$startDate,$endDate)) { $resp["msg"]="Driver is busy for these dates. Please change dates or vehicle."; if($isAjax){ header('Content-Type:application/json'); ob_clean(); echo json_encode($resp); exit; } }
+  if ($driverId===0) { $out(["ok"=>false,"msg"=>"No available driver for the selected vehicle.","redirect"=>$redirectUrl]); }
+  if (have_overlap($conn,"Driver_ID",$driverId,$startDate,$endDate)) { $out(["ok"=>false,"msg"=>"Driver is busy for these dates. Please change dates or vehicle.","redirect"=>$redirectUrl]); }
 
-  // EXACTLY 19 placeholders to match 19 variables bound below.
-  $bp = $conn->prepare("
-    INSERT INTO bookings
-      (F_Name, L_Name, Email, Phone_No, NIC_or_Paasport, Start_Date_Time, End_Date_Time, Pickup_Location, End_Location,
-       Number_of_People, Booking_Type, Guide_Preferences, Status, Completed_At, Price, Payment_Method, Payment_Status,
-       Driver_earning, Guide_earning, User_ID, Driver_ID, Guide_ID, Package_ID)
-    VALUES
-      (?,?,?,?,?,?,?,?,?,?,'Package',?,'Pending',?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
-  ");
+  if ($step === 'pay') {
+    // Save all fields to session so we can repopulate after returning from Stripe
+    $_SESSION['pending_pkg_form']  = $_POST;
+    $_SESSION['pending_pkg_price'] = (int)round($price);
+    try {
+      $token = bin2hex(random_bytes(8));
+      $_SESSION['pkg_pay_token'] = $token;
 
-  if ($bp === false) {
-    $resp["msg"] = "Failed to prepare booking statement.";
-    if ($isAjax) { header('Content-Type: application/json'); ob_clean(); echo json_encode($resp); exit; }
-    header("Location: ".$redirectUrl); exit;
+      $successUrl = $APP_BASE . '/BookingPackage.php?id='.$packageId.'&paid=1&tok=' . urlencode($token);
+      $cancelUrl  = $APP_BASE . '/BookingPackage.php?id='.$packageId.'&cancelled=1';
+
+      $session = stripe_create_checkout_session(0, (float)$_SESSION['pending_pkg_price'], $email, 'Package booking', $successUrl, $cancelUrl);
+      $out(["ok"=>true,"msg"=>"Redirecting to secure checkout…","redirect"=>$session->url]);
+    } catch (Throwable $e) {
+      $out(["ok"=>false,"msg"=>"Unable to start payment.","redirect"=>$redirectUrl,"_raw"=>$e->getMessage()]);
+    }
   }
 
-  $guidePref = 1;
-  $completedAt = '0000-00-00 00:00:00';
-  $priceVal = (int)round($price);
-  $payStatus = 'Unpaid';
+  if ($step === 'submit') {
+    if ($payMethod==='Online' && empty($_SESSION['pkg_paid_ok'])) {
+      $out(["ok"=>false,"msg"=>"Please complete the online payment first via the Pay Now button."]);
+    }
 
-  // 19 vars => types: 9s, i, i, s, i, s, s, i, i, i, i
-  $types = "sssssssssiisissiiii";
-  $bp->bind_param(
-    $types,
-    $f,$l,$email,$phone,$nic,$startDate,$endDate,$pickup,$drop,$people,
-    $guidePref,$completedAt,$priceVal,$payMethod,$payStatus,
-    $uid,$driverId,$chosenGuideId,$packageId
-  );
+    // ORIGINAL SQL (unchanged)
+    $bp = $conn->prepare("
+      INSERT INTO bookings
+        (F_Name, L_Name, Email, Phone_No, NIC_or_Paasport, Start_Date_Time, End_Date_Time, Pickup_Location, End_Location,
+         Number_of_People, Booking_Type, Guide_Preferences, Status, Completed_At, Price, Payment_Method, Payment_Status,
+         Driver_earning, Guide_earning, User_ID, Driver_ID, Guide_ID, Package_ID)
+      VALUES
+        (?,?,?,?,?,?,?,?,?,?,'Package',?,'Pending',?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+    ");
+    if ($bp === false) { $out(["ok"=>false,"msg"=>"Failed to prepare booking statement.","redirect"=>$redirectUrl]); }
 
-  if ($bp->execute()) {
-    $newId = $bp->insert_id;
-    $resp["ok"]=true;
-    $resp["msg"]="Booking confirmed. Reference #".$newId.".";
-    $resp["reference"]=$newId;
-  } else {
-    $resp["msg"]="Failed to save booking.";
+    $guidePref = 1;
+    $completedAt = '0000-00-00 00:00:00';
+    $priceVal = (int)round($price);
+    $payStatus = ($payMethod==='Online' ? (!empty($_SESSION['pkg_paid_ok']) ? 'Paid' : 'Unpaid') : 'Unpaid');
+
+    $types = "sssssssssiisissiiii";
+    $bp->bind_param(
+      $types,
+      $f,$l,$email,$phone,$nic,$startDate,$endDate,$pickup,$drop,$people,
+      $guidePref,$completedAt,$priceVal,$payMethod,$payStatus,
+      $uid,$driverId,$chosenGuideId,$packageId
+    );
+
+    if ($bp->execute()) {
+      $newId = $bp->insert_id;
+      // clear payment temp state
+      unset($_SESSION['pending_pkg_form'], $_SESSION['pending_pkg_price'], $_SESSION['pkg_paid_ok'], $_SESSION['pkg_pay_token']);
+      $out(["ok"=>true,"reference"=>$newId,"msg"=>"Booking confirmed. Reference #".$newId.".","redirect"=>$redirectUrl]);
+    } else {
+      $out(["ok"=>false,"msg"=>"Failed to save booking."]);
+    }
+    $bp->close();
   }
-  $bp->close();
 
-  if ($isAjax) { header('Content-Type: application/json'); ob_clean(); echo json_encode($resp); exit; }
-
-  header("Location: ".$redirectUrl);
-  exit;
+  $out(["ok"=>false,"msg"=>"Invalid request.","redirect"=>$redirectUrl]);
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+   Preload guides for initial page
+──────────────────────────────────────────────────────────────────────────── */
 $guides = [];
 $gr = $conn->query("SELECT g.Guide_ID, g.F_Name, g.L_Name, g.Rating, u.User_Profile FROM guide g LEFT JOIN user u ON u.User_ID=g.User_ID WHERE g.Status='Available' ORDER BY CAST(NULLIF(g.Rating,'') AS DECIMAL(10,2)) DESC, g.Guide_ID ASC");
 if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Prefill form values from session after Stripe
+──────────────────────────────────────────────────────────────────────────── */
+$prefill = [
+  'Package_ID' => $packageId,
+  'F_Name' => '', 'L_Name' => '', 'Email' => '', 'Phone_No' => '', 'NIC_or_Paasport' => '',
+  'Pickup_Location' => '', 'End_Location' => '', 'Start_Date_Time' => '',
+  'Number_of_People' => '1', 'Vehicle_Category' => '', 'Guide_ID' => '', 'Payment_Method' => 'Cash'
+];
+if (!empty($_SESSION['pending_pkg_form'])) {
+  foreach ($prefill as $k=>$v) {
+    if (isset($_SESSION['pending_pkg_form'][$k])) $prefill[$k] = $_SESSION['pending_pkg_form'][$k];
+  }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -209,10 +269,22 @@ if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Book Package</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="Styles/BookinPpackage.css">
+  <link rel="stylesheet" href="Styles/booking_package.css">
+  <style>
+    .guide-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.6rem}
+    .guide-card{border:1px solid #e9ecef;border-radius:.75rem;cursor:pointer}
+    .guide-card input{display:none}
+    .gc-body{display:flex;gap:.6rem;padding:.6rem}
+    .gc-avatar{width:44px;height:44px;border-radius:999px;object-fit:cover}
+    .gc-meta .gc-name{font-weight:600}
+  </style>
 </head>
 <body>
   <div class="container py-4">
+    <?php if (isset($_GET['paid']) && $_GET['paid']=='1' && !empty($_SESSION['pkg_paid_ok'])): ?>
+      <div class="alert alert-success">Payment successful. Please click <strong>Confirm Booking</strong> to save your booking.</div>
+    <?php endif; ?>
+
     <?php if (!$package): ?>
       <div class="alert alert-warning">Package not found.</div>
     <?php else: ?>
@@ -259,40 +331,45 @@ if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
         <div class="card h-100">
           <div class="card-body">
             <h4 class="mb-3">Booking Details</h4>
+
+            <!-- MAIN FORM (final confirm) -->
             <form id="bookForm" method="post" class="row g-3" novalidate>
+              <input type="hidden" name="__step" value="submit">
+              <input type="hidden" id="Paid_Flag" value="<?= !empty($_SESSION['pkg_paid_ok']) ? '1':'0' ?>">
               <input type="hidden" name="Package_ID" value="<?= (int)$package['Package_ID'] ?>">
+
               <div class="col-md-6">
                 <label class="form-label">First Name</label>
-                <input type="text" name="F_Name" class="form-control" required>
+                <input type="text" name="F_Name" class="form-control" required value="<?= htmlspecialchars($prefill['F_Name']) ?>">
               </div>
               <div class="col-md-6">
                 <label class="form-label">Last Name</label>
-                <input type="text" name="L_Name" class="form-control" required>
+                <input type="text" name="L_Name" class="form-control" required value="<?= htmlspecialchars($prefill['L_Name']) ?>">
               </div>
               <div class="col-md-6">
                 <label class="form-label">Email</label>
-                <input type="email" name="Email" class="form-control" required>
+                <input type="email" name="Email" class="form-control" required value="<?= htmlspecialchars($prefill['Email']) ?>">
               </div>
               <div class="col-md-6">
                 <label class="form-label">Contact Number</label>
-                <input type="text" name="Phone_No" class="form-control" required>
+                <input type="text" name="Phone_No" class="form-control" required value="<?= htmlspecialchars($prefill['Phone_No']) ?>">
               </div>
               <div class="col-12">
                 <label class="form-label">NIC / Passport</label>
-                <input type="text" name="NIC_or_Paasport" class="form-control" required>
+                <input type="text" name="NIC_or_Paasport" class="form-control" required value="<?= htmlspecialchars($prefill['NIC_or_Paasport']) ?>">
               </div>
               <div class="col-12">
                 <label class="form-label">Pickup Location</label>
-                <input type="text" name="Pickup_Location" class="form-control gmaps-place" required>
+                <input type="text" name="Pickup_Location" class="form-control gmaps-place" required value="<?= htmlspecialchars($prefill['Pickup_Location']) ?>">
               </div>
               <div class="col-12">
                 <label class="form-label">End Location</label>
-                <input type="text" name="End_Location" class="form-control gmaps-place" required>
+                <input type="text" name="End_Location" class="form-control gmaps-place" required value="<?= htmlspecialchars($prefill['End_Location']) ?>">
               </div>
 
               <div class="col-md-6">
                 <label class="form-label">Starting Date</label>
-                <input type="date" id="startDate" name="Start_Date_Time" class="form-control" required>
+                <input type="date" id="startDate" name="Start_Date_Time" class="form-control" required value="<?= htmlspecialchars($prefill['Start_Date_Time']) ?>">
               </div>
               <div class="col-md-6">
                 <label class="form-label">End Date</label>
@@ -301,7 +378,7 @@ if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
 
               <div class="col-md-6">
                 <label class="form-label">Number of People</label>
-                <input type="number" min="1" value="1" id="people" name="Number_of_People" class="form-control" required>
+                <input type="number" min="1" value="<?= htmlspecialchars($prefill['Number_of_People']) ?>" id="people" name="Number_of_People" class="form-control" required>
               </div>
 
               <div class="col-12">
@@ -318,7 +395,7 @@ if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
                   <?php else: ?>
                     <?php foreach ($guides as $g): $full = trim(($g['F_Name']??"")." ".($g['L_Name']??"")); $imgRaw = $g['User_Profile'] ?: 'Images/defaultuser.jpg'; ?>
                       <label class="guide-card">
-                        <input type="radio" name="Guide_ID" value="<?= (int)$g['Guide_ID'] ?>">
+                        <input type="radio" name="Guide_ID" value="<?= (int)$g['Guide_ID'] ?>" <?= ($prefill['Guide_ID']==$g['Guide_ID'] ? 'checked':'') ?>>
                         <div class="gc-body">
                           <img src="<?= htmlspecialchars(function_exists('url') ? url($imgRaw) : $imgRaw) ?>" alt="Guide" class="gc-avatar">
                           <div class="gc-meta">
@@ -335,16 +412,39 @@ if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
 
               <div class="col-md-6">
                 <label class="form-label">Payment Method</label>
-                <select name="Payment_Method" class="form-select" required>
-                  <option value="Cash">Cash</option>
-                  <option value="Online">Online</option>
-                </select>
+                <div class="d-flex align-items-center gap-2">
+                  <select name="Payment_Method" id="Payment_Method" class="form-select" required style="max-width:200px">
+                    <option value="Cash"   <?= (empty($_SESSION['pkg_paid_ok']) && $prefill['Payment_Method']!=='Online') ? 'selected':'' ?>>Cash</option>
+                    <option value="Online" <?= (!empty($_SESSION['pkg_paid_ok']) || $prefill['Payment_Method']==='Online') ? 'selected':'' ?>>Online</option>
+                  </select>
+                  <button type="button" id="payNowBtn" class="btn btn-outline-primary">Pay Now</button>
+                </div>
+                <div class="form-text">Pay online first, then click Confirm Booking.</div>
               </div>
 
               <div class="col-12">
-                <button type="submit" class="btn btn-primary w-100">Confirm Booking</button>
+                <button type="submit" id="confirmBtn" class="btn btn-primary w-100">Confirm Booking</button>
               </div>
             </form>
+
+            <!-- HIDDEN PAY FORM (Stripe) -->
+            <form id="payForm" method="post" class="d-none">
+              <input type="hidden" name="__step" value="pay">
+              <input type="hidden" name="Package_ID" value="<?= (int)$package['Package_ID'] ?>">
+              <input type="hidden" name="F_Name">
+              <input type="hidden" name="L_Name">
+              <input type="hidden" name="Email">
+              <input type="hidden" name="Phone_No">
+              <input type="hidden" name="NIC_or_Paasport">
+              <input type="hidden" name="Pickup_Location">
+              <input type="hidden" name="End_Location">
+              <input type="hidden" name="Start_Date_Time">
+              <input type="hidden" name="Number_of_People">
+              <input type="hidden" name="Vehicle_Category">
+              <input type="hidden" name="Guide_ID">
+              <input type="hidden" name="Payment_Method" value="Online">
+            </form>
+
           </div>
         </div>
       </div>
@@ -381,24 +481,27 @@ if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
     const caps = {"Bike":1,"Tuk-Tuk":2,"Mini-Car":3,"Car":4,"Van":7,"Bus":30};
     const redirectUrl = "<?= htmlspecialchars($redirectUrl) ?>";
     const pkgId = <?= (int)$packageId ?>;
+    const paidFlag = document.getElementById('Paid_Flag');
+    const payNowBtn = document.getElementById('payNowBtn');
+    const confirmBtn = document.getElementById('confirmBtn');
+    const paymentSel = document.getElementById('Payment_Method');
 
     function computeEndDate() {
       if (!startDateEl.value || durationDays <= 0) { endDateEl.value = ""; return; }
       const d = new Date(startDateEl.value);
       d.setDate(d.getDate() + (durationDays - 1));
-      const iso = d.toISOString().slice(0,10);
-      endDateEl.value = iso;
+      endDateEl.value = d.toISOString().slice(0,10);
     }
     function buildVehicleOptions() {
       const p = Math.max(1, parseInt(peopleEl.value || "1", 10));
       const total = p + 1;
       vehicleEl.innerHTML = "";
-      const entries = Object.entries(caps).filter(([k,v]) => v >= total).sort((a,b)=>a[1]-b[1]);
-      entries.forEach(([k,v])=>{
-        const opt = document.createElement('option');
-        opt.value = k; opt.textContent = k + " (up to " + v + ")";
-        vehicleEl.appendChild(opt);
+      Object.entries(caps).filter(([k,v])=>v>=total).sort((a,b)=>a[1]-b[1]).forEach(([k,v])=>{
+        const opt=document.createElement('option'); opt.value=k; opt.textContent=`${k} (up to ${v})`; vehicleEl.appendChild(opt);
       });
+      // preselect if we have a stored value
+      const stored = "<?= htmlspecialchars($prefill['Vehicle_Category']) ?>";
+      if (stored) vehicleEl.value = stored;
     }
     async function refreshGuides() {
       if (!startDateEl.value) return;
@@ -407,65 +510,130 @@ if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
       url.searchParams.set('package_id', String(pkgId));
       url.searchParams.set('start', startDateEl.value);
       const res = await fetch(url.toString(), { headers: { 'X-Requested-With':'XMLHttpRequest' } });
-      let data = {};
-      try { data = await res.json(); } catch(e){}
+      let data = {}; try { data = await res.json(); } catch(e){}
       if (data && data.ok !== false && typeof data.html === 'string') {
         guideList.innerHTML = data.html || '<div class="text-muted">No guides available.</div>';
+        // restore selected guide if any
+        const gid = "<?= htmlspecialchars($prefill['Guide_ID']) ?>";
+        if (gid) {
+          const r = guideList.querySelector(`input[name="Guide_ID"][value="${CSS.escape(gid)}"]`);
+          if (r) r.checked = true;
+        }
       }
     }
-
-    startDateEl && startDateEl.addEventListener('change', ()=>{ computeEndDate(); refreshGuides(); });
-    peopleEl && peopleEl.addEventListener('input', buildVehicleOptions);
+    startDateEl?.addEventListener('change', ()=>{ computeEndDate(); refreshGuides(); });
+    peopleEl?.addEventListener('input', buildVehicleOptions);
     computeEndDate(); buildVehicleOptions();
 
-    formEl && formEl.addEventListener('submit', async (e)=>{
+    function syncConfirmState(){
+      const online = paymentSel.value==='Online';
+      if (online){
+        confirmBtn.disabled = (paidFlag.value!=='1');
+        payNowBtn.classList.remove('d-none');
+      } else {
+        confirmBtn.disabled = false;
+        payNowBtn.classList.add('d-none');
+      }
+    }
+    paymentSel?.addEventListener('change', syncConfirmState);
+    syncConfirmState();
+
+    // Final submit (AJAX)
+    formEl?.addEventListener('submit', async (e)=>{
       e.preventDefault();
       const fd = new FormData(formEl);
       let text = '';
       try {
         const res = await fetch(location.href, { method:'POST', body: fd, headers:{'X-Requested-With':'XMLHttpRequest'} });
         text = await res.text();
-      } catch(err) {
-        text = '';
-      }
-      let data;
-      try { data = JSON.parse(text); } catch(e) { data = { ok:false, msg:'Unexpected response', _raw:text }; }
+      } catch(err) { text = ''; }
+      let data; try { data = JSON.parse(text); } catch(e) { data = { ok:false, msg:'Unexpected response', _raw:text }; }
       const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
       const dbg = document.getElementById('debugText');
       if (data.ok) {
-        document.getElementById('confirmText').textContent = data.msg;
-        dbg.style.display = 'none';
+        document.getElementById('confirmText').textContent = data.msg || 'Success';
+        dbg.style.display='none';
         document.getElementById('goBtn').onclick = ()=>{ window.location.href = data.redirect || redirectUrl; };
         modal.show();
-        setTimeout(()=>{ window.location.href = data.redirect || redirectUrl; }, 2000);
+        setTimeout(()=>{ window.location.href = data.redirect || redirectUrl; }, 900);
       } else {
         document.getElementById('confirmText').textContent = data.msg || "Something went wrong.";
-        if (data._raw) { dbg.textContent = String(data._raw); dbg.style.display = 'block'; } else { dbg.style.display = 'none'; }
+        if (data._raw) { dbg.textContent = String(data._raw); dbg.style.display='block'; } else { dbg.style.display='none'; }
         document.getElementById('goBtn').onclick = ()=>{ modal.hide(); };
         modal.show();
       }
     });
 
+    // "Pay Now" → send hidden pay form (keeps main form __step=submit)
+    payNowBtn?.addEventListener('click', async ()=>{
+      if (paymentSel.value!=='Online') return;
+      const src = document.getElementById('bookForm');
+      const dst = document.getElementById('payForm');
+      ['F_Name','L_Name','Email','Phone_No','NIC_or_Paasport','Pickup_Location','End_Location',
+       'Start_Date_Time','Number_of_People','Vehicle_Category','Guide_ID'].forEach(k=>{
+        const v = src.querySelector(`[name="${k}"]`)?.value || '';
+        const t = dst.querySelector(`[name="${k}"]`); if (t) t.value = v;
+      });
+      const payFd = new FormData(dst);
+      let text = '';
+      try {
+        const res = await fetch(location.href, { method:'POST', body: payFd, headers:{'X-Requested-With':'XMLHttpRequest'} });
+        text = await res.text();
+      } catch(err) { text = ''; }
+      let data; try { data = JSON.parse(text); } catch(e) { data = { ok:false, msg:'Unexpected response', _raw:text }; }
+      if (data.ok && data.redirect){
+        window.location.href = data.redirect;
+      } else {
+        const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+        document.getElementById('confirmText').textContent = data.msg || "Unable to start payment.";
+        const dbg = document.getElementById('debugText');
+        if (data._raw) { dbg.textContent = String(data._raw); dbg.style.display='block'; } else { dbg.style.display='none'; }
+        document.getElementById('goBtn').onclick = ()=>{ modal.hide(); };
+        modal.show();
+      }
+    });
+
+    // Google Places
     let mapApiLoaded = false;
     function attachAutocomplete(input){
-      if (!input) return;
-      if (!mapApiLoaded) return;
-      new google.maps.places.Autocomplete(input, {
-        fields: ["formatted_address","geometry","name"],
-        componentRestrictions: { country: ["lk"] }
-      });
+      if (!input || !mapApiLoaded) return;
+      new google.maps.places.Autocomplete(input, { fields: ["formatted_address","geometry","name"], componentRestrictions: { country: ["lk"] } });
     }
-    function initPlaces(){
-      mapApiLoaded = true;
-      document.querySelectorAll('.gmaps-place').forEach(attachAutocomplete);
-    }
+    function initPlaces(){ mapApiLoaded = true; document.querySelectorAll('.gmaps-place').forEach(attachAutocomplete); }
     window.initPlaces = initPlaces;
-
     (function(){
       const s=document.createElement('script');
       s.src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCYCblZmBwFlc_NfpJoS5bMWP87Pm3wM9w&libraries=places&callback=initPlaces";
       s.defer=true; s.async=true; document.head.appendChild(s);
     })();
+
+    // Restore form (front-end) from session JSON if present (server already set values in HTML, this is extra safety)
+    <?php if (!empty($_SESSION['pending_pkg_form'])): ?>
+    (function restoreForm(){
+      const pf = <?= json_encode($_SESSION['pending_pkg_form']) ?>;
+      Object.entries(pf).forEach(([k,v])=>{
+        const el = document.querySelector(`[name="${CSS.escape(k)}"]`);
+        if (!el) return;
+        if (el.type==='radio' || el.type==='checkbox'){
+          const el2 = document.querySelector(`[name="${CSS.escape(k)}"][value="${CSS.escape(String(v))}"]`);
+          if (el2) el2.checked = true;
+        } else {
+          el.value = v;
+        }
+      });
+      computeEndDate();
+    })();
+    <?php endif; ?>
+
+    // On load after Stripe success ensure Online selected and Confirm enabled
+    window.addEventListener('load', ()=>{
+      const url = new URL(location.href);
+      if (url.searchParams.get('paid')==='1'){ document.getElementById('Payment_Method').value='Online'; paidFlag.value='1'; }
+      computeEndDate();
+      buildVehicleOptions();
+      refreshGuides();
+      syncConfirmState();
+    });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
