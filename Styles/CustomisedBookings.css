@@ -1,0 +1,27 @@
+.steps{display:flex;gap:8px;flex-wrap:wrap}
+.step{padding:6px 10px;border:1px solid #e1e5ea;border-radius:999px;font-size:.9rem;color:#6c757d}
+.step.active{background:#0d6efd;color:#fff;border-color:#0d6efd}
+.step-pane{margin-top:12px}
+.day-card{border:1px solid #e9ecef;border-radius:12px;padding:12px;margin-bottom:12px}
+.dest-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.dest-row{display:flex;gap:8px}
+.dest-row .form-control{flex:1}
+.calc-box{border:1px dashed #cfe2ff;background:#f8fbff;border-radius:12px;padding:12px}
+.guide-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.guide-card{border:1px solid #e9ecef;border-radius:12px;padding:8px;cursor:pointer;display:block}
+.guide-card input{display:none}
+.gc-body{display:flex;gap:10px;align-items:center}
+.gc-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover}
+.gc-meta{display:flex;flex-direction:column}
+.gc-name{font-weight:600}
+.gc-rating{font-size:.9rem;color:#666}
+.guide-card:has(input:checked){border-color:#0d6efd;box-shadow:0 0 0 3px rgba(13,110,253,.15)}
+.review-box{border:1px solid #e9ecef;border-radius:12px;padding:12px}
+.summary-box{border:1px solid #f1f3f5;border-radius:12px;padding:12px;display:grid;gap:6px}
+.summary-box div{display:flex;justify-content:space-between;gap:10px}
+.summary-box span{color:#6c757d}
+.itinerary-pre{max-height:300px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px}
+.it-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px}
+.it-date{font-weight:600;min-width:110px}
+.it-dests{display:flex;gap:6px;flex-wrap:wrap}
+.it-dests span{background:#f1f3f5;border-radius:999px;padding:2px 8px}
