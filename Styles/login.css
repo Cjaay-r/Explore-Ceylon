@@ -1,0 +1,245 @@
+* {
+      box-sizing: border-box;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #background-blur {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('../Images/Login BG Img.jpg') no-repeat center center/cover;
+      filter: blur(10px);
+      z-index: -2;
+    }
+
+    #background-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.2);
+      z-index: -1;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      position: relative;
+    }
+
+    .wrapper {
+      display: flex;
+      width: 850px;
+      height: 550px;
+      background: rgba(255, 255, 255, 0);
+      border-radius: 10px;
+      overflow: hidden;
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.15);
+    }
+
+    .container {
+      position: relative;
+      width: 60%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .form-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      padding: 40px;
+      background-color: #ffffff4a;
+      transition: transform 0.6s ease, opacity 0.6s ease;
+      overflow-y: auto;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      height: 100%;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    input {
+      padding: 12px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+
+    .submit-bt {
+      padding: 12px;
+      border: none;
+      border-radius: 5px;
+      background-color: #2ecc71;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 10px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .submit-bt:hover {
+      background-color: #27ae60;
+    }
+
+    .toggle-btn {
+      background: none;
+      color: #ffffff;
+      border: none;
+      margin-top: 12px;
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .toggle-btn:hover {
+      color: #174EA6;
+    }
+
+    .register-container {
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .active .login-container {
+      transform: translateX(-100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .active .register-container {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .branding-container {
+      width: 40%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .branding-container h1 {
+      position: relative;
+      z-index: 2;
+      font-size: 46px;
+      letter-spacing: 2px;
+      line-height: 1.4;
+      text-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+      margin: 0;
+    }
+
+    .spline-wrapper {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    spline-viewer {
+      width: 100%;
+      height: 100%;
+    }
+
+    .box {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 200px;
+      height: 50px;
+      background-color: #27ae60;
+      border-radius: 8px;
+      z-index: 3;
+    }
+
+    .form-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .form-container::-webkit-scrollbar-thumb {
+      background-color: #2ecc71;
+      border-radius: 3px;
+    }
+
+    /* ✅ Mobile Responsive */
+   @media (max-width: 768px) {
+  .wrapper {
+    flex-direction: column;
+    width: 90%;
+    height: auto;
+  }
+
+  .container,
+  .branding-container {
+    width: 100%;
+    height: auto;
+  }
+    .branding-container{
+      display: none;
+    }
+
+  .form-container {
+    position: static;
+    width: 100%;
+    height: auto;
+    transform: 1 !important;
+    opacity: 1 !important;
+    pointer-events: all !important;
+    padding: 30px 20px;
+    display: none; /* Hide by default */
+  }
+
+  .login-container {
+    display: block; /* Show login by default */
+    
+  }
+
+  .container.active .login-container {
+    display: none;
+    
+  }
+
+  .container.active .register-container {
+    display: block;
+    
+  }
+}

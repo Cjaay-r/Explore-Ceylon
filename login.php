@@ -1,28 +1,31 @@
 <?php
 session_start();
+require_once __DIR__ . '/Includes/dbconnect.php';
 
-// Redirect logged-in users to index.php
-if (isset($_SESSION['User_ID'])) {
-    header("Location: index.php");
-    exit;
+function redirect_by_role($type) {
+    if ($type === 'Admin') return 'Admin/AdminDashboard.php';
+    if ($type === 'Guide') return 'Admin/GuideDashboard.php';
+    if ($type === 'Driver') return 'Admin/DriverDashboard.php';
+    return 'index.php';
 }
 
-// bring in the shared DB connection
-require_once __DIR__ . '/Includes/dbconnect.php';
+if (isset($_SESSION['User_ID'])) {
+    $dest = isset($_SESSION['User_Type']) ? redirect_by_role($_SESSION['User_Type']) : 'index.php';
+    header("Location: $dest");
+    exit;
+}
 
 $error = "";
 $success = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    // ===== REGISTER =====
     if (isset($_POST['register'])) {
         $username = trim($_POST['username']);
         $email = trim($_POST['email']);
         $phone = trim($_POST['phone']);
         $password = $_POST['password'];
         $confirm_password = $_POST['confirm_password'];
-        $profile = 'default.png'; // Default profile image
+        $profile = 'default.png';
         $user_type = 'User';
 
         if ($password !== $confirm_password) {
@@ -48,13 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // ===== LOGIN =====
     if (isset($_POST['login'])) {
-        $email = trim($_POST['email']);
+        $login_id = trim($_POST['email']);
         $password = $_POST['password'];
 
-        $stmt = $conn->prepare("SELECT * FROM user WHERE Email=?");
-        $stmt->bind_param("s", $email);
+        $stmt = $conn->prepare("SELECT * FROM user WHERE Email=? OR Username=? LIMIT 1");
+        $stmt->bind_param("ss", $login_id, $login_id);
         $stmt->execute();
         $result = $stmt->get_result();
 
@@ -64,14 +66,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['User_ID']   = $user['User_ID'];
                 $_SESSION['Username']  = $user['Username'];
                 $_SESSION['User_Type'] = $user['User_Type'];
-                header("Location: " . ($_SESSION['User_Type'] === 'Admin' ? 'Admin/AdminDashboard.php' : 'index.php'));
-
+                $dest = redirect_by_role($user['User_Type']);
+                header("Location: $dest");
                 exit;
             } else {
                 $error = "Incorrect password.";
             }
         } else {
-            $error = "Email not registered.";
+            $error = "Email/Username not registered.";
         }
     }
 }
@@ -86,29 +88,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link rel="stylesheet" href="Styles/login.css">
 </head>
 <body>
-  <!-- Background Layers -->
   <div id="background-blur"></div>
   <div id="background-overlay"></div>
 
   <div class="wrapper">
     <div class="container" id="formBox">
-
-      <!-- Login Form -->
       <div class="form-container login-container">
         <?php
-        if ($error) echo '<div class="message" style="color:white;text-align:center;">'.$error.'</div>';
-        if ($success) echo '<div class="message" style="color:green;text-align:center;margin-bottom:10px;">'.$success.'</div>';
+        if ($error) echo '<div class="message error">'.$error.'</div>';
+        if ($success) echo '<div class="message success">'.$success.'</div>';
         ?>
         <form method="POST">
           <h2>Login</h2>
-          <input type="email" name="email" placeholder="Email" required />
+          <input type="text" name="email" placeholder="Email or Username" required />
           <input type="password" name="password" placeholder="Password" required />
           <button type="submit" name="login" class="submit-bt">Login</button>
-          <button type="button" class="toggle-btn" onclick="showRegister()">Don't have an account? Register</button>
+          <button type="button" class="toggle-btn" onclick="showRegister()">Don\'t have an account? Register</button>
         </form>
       </div>
 
-      <!-- Register Form -->
       <div class="form-container register-container">
         <form method="POST">
           <h2>Register</h2>
@@ -121,7 +119,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <button type="button" class="toggle-btn" onclick="showLogin()">Already have an account? Login</button>
         </form>
       </div>
-
     </div>
 
     <div class="branding-container">

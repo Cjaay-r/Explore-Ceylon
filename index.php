@@ -184,7 +184,7 @@ if ($pkg_res = $conn->query($pkg_sql)) {
                     ?>
                   </p>
                   <p class="package-price">From <span>
-                    $<?php echo number_format((float)$p['Price'], 2); ?>
+                    Rs.<?php echo number_format((float)$p['Price'], 2); ?>
                   </span></p>
                 </div>
 

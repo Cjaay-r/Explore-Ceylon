@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 08, 2025 at 09:32 PM
+-- Generation Time: Oct 10, 2025 at 09:17 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -54,6 +54,14 @@ CREATE TABLE `bookings` (
   `Guide_ID` int(11) DEFAULT NULL,
   `Package_ID` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `bookings`
+--
+
+INSERT INTO `bookings` (`Booking_ID`, `F_Name`, `L_Name`, `Email`, `Phone_No`, `NIC_or_Paasport`, `Start_Date_Time`, `End_Date_Time`, `Pickup_Location`, `End_Location`, `Number_of_People`, `Booking_Type`, `Guide_Preferences`, `Status`, `Completed_At`, `Progress`, `Price`, `Payment_Method`, `Payment_Status`, `Driver_earning`, `Guide_earning`, `User_ID`, `Driver_ID`, `Guide_ID`, `Package_ID`) VALUES
+(1, 'Ranil', 'Wickremesinghe', 'ranil@gmail.com', '0776543845', '4646434235346', '2025-10-10', '2025-10-11', 'Kandy, Sri Lanka', 'Kurunegala, Sri Lanka', 3, 'Package', 1, 'Pending', '0000-00-00 00:00:00', '', 40000, 'Online', 'Unpaid', 0, 0, 7, 5, 2, 28),
+(9, 'shshsh', 'shshsh', 'mahinda@gmail.com', '0776543845', '4646434235346', '2025-10-16', '2025-10-17', 'Kandy, Sri Lanka', 'Kurunegala, Sri Lanka', 3, 'Package', 1, 'Pending', '0000-00-00 00:00:00', '', 40000, 'Online', 'Unpaid', 0, 0, 22, 5, 2, 28);
 
 -- --------------------------------------------------------
 
@@ -140,6 +148,14 @@ CREATE TABLE `driver` (
   `User_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `driver`
+--
+
+INSERT INTO `driver` (`Driver_ID`, `F_Name`, `L_Name`, `NIC_or_Pass`, `Description`, `Vehicle_Category`, `Vehicle_No`, `Fixed_Price`, `PricePer_Km`, `Total_Income`, `Status`, `Rating`, `Completed_trips`, `User_ID`) VALUES
+(4, 'Mahinda', 'Rajapaksha', '867487687387', '', 'Van', 'N2334', 5000, 110, 0, 'Available', 5, 0, 20),
+(5, 'Charana', 'wijesinghe', '6477567823', '', 'Car', 'CAG5745', 2500, 90, 0, 'Available', 5, 0, 21);
+
 -- --------------------------------------------------------
 
 --
@@ -160,6 +176,13 @@ CREATE TABLE `guide` (
   `User_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `guide`
+--
+
+INSERT INTO `guide` (`Guide_ID`, `F_Name`, `L_Name`, `NIC_or_Pass`, `Description`, `Price_per_Day`, `Rating`, `Status`, `Total_Income`, `Completed_trips`, `User_ID`) VALUES
+(2, 'Namal', 'Rajapaksha', '5473536353', 'im good in english language', 0, 5, 'Available', 0, 0, 15);
+
 -- --------------------------------------------------------
 
 --
@@ -172,7 +195,9 @@ CREATE TABLE `inquiry` (
   `Message` varchar(1000) NOT NULL,
   `Reply` varchar(1000) DEFAULT NULL,
   `Date&Time` date NOT NULL,
-  `User_ID` int(11) NOT NULL
+  `User_ID` int(11) NOT NULL,
+  `Driver_ID` int(11) DEFAULT NULL,
+  `Guide_ID` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -208,6 +233,14 @@ CREATE TABLE `language` (
   `Language` varchar(300) NOT NULL,
   `Guide_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `notifications`
+--
+-- Error reading structure for table explore_ceylon_db.notifications: #1932 - Table 'explore_ceylon_db.notifications' doesn't exist in engine
+-- Error reading data for table explore_ceylon_db.notifications: #1064 - You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'FROM `explore_ceylon_db`.`notifications`' at line 1
 
 -- --------------------------------------------------------
 
@@ -287,6 +320,7 @@ CREATE TABLE `tickets` (
   `Valid_Date` date NOT NULL,
   `Total_Price` decimal(10,0) NOT NULL,
   `Qr` varchar(300) NOT NULL,
+  `Payment_Status` enum('Paid','Unpaid') NOT NULL,
   `User_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -294,16 +328,16 @@ CREATE TABLE `tickets` (
 -- Dumping data for table `tickets`
 --
 
-INSERT INTO `tickets` (`Ticket_ID`, `Name`, `Contact_No`, `Destination`, `Category`, `No_Of_People`, `Purchased_Date`, `Valid_Date`, `Total_Price`, `Qr`, `User_ID`) VALUES
-(6, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:49:41', '2025-10-10', 1500, 'QR_68e5a00dcff7e', 1),
-(7, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:53:56', '2025-10-10', 1500, 'QR_68e5a10c9d32b', 1),
-(8, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:54:38', '2025-10-10', 1500, 'QR_68e5a136bdc82', 1),
-(9, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 05:01:33', '2025-10-10', 1500, 'QR_68e5a2d5b104c', 1),
-(10, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 05:02:30', '2025-10-10', 1500, 'QR_68e5a30ece554', 1),
-(11, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Sinharaja Forest Reserve', 'Nature', 4, '2025-10-08 18:20:25', '2025-10-10', 8000, 'QR_68e65e11d6b54', 1),
-(12, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Colombo National Museum', 'Museum', 4, '2025-10-08 23:31:48', '2025-10-10', 4800, 'QR_68e6a70c4874a', 1),
-(13, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Seethawaka Botanical Garden', 'Nature', 4, '2025-10-08 23:32:32', '2025-10-10', 8000, 'QR_68e6a7386d5c6', 1),
-(14, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Mirijjawila Dry Zone Botanical Garden', 'Nature', 4, '2025-10-08 23:33:37', '2025-10-10', 8000, 'QR_68e6a779b2f9e', 1);
+INSERT INTO `tickets` (`Ticket_ID`, `Name`, `Contact_No`, `Destination`, `Category`, `No_Of_People`, `Purchased_Date`, `Valid_Date`, `Total_Price`, `Qr`, `Payment_Status`, `User_ID`) VALUES
+(6, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:49:41', '2025-10-10', 1500, 'QR_68e5a00dcff7e', 'Paid', 1),
+(7, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:53:56', '2025-10-10', 1500, 'QR_68e5a10c9d32b', 'Paid', 1),
+(8, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 04:54:38', '2025-10-10', 1500, 'QR_68e5a136bdc82', 'Paid', 1),
+(9, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 05:01:33', '2025-10-10', 1500, 'QR_68e5a2d5b104c', 'Paid', 1),
+(10, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Dhalada Maligawa', 'Cultural', 1, '2025-10-08 05:02:30', '2025-10-10', 1500, 'QR_68e5a30ece554', 'Paid', 1),
+(11, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Sinharaja Forest Reserve', 'Nature', 4, '2025-10-08 18:20:25', '2025-10-10', 8000, 'QR_68e65e11d6b54', 'Paid', 1),
+(12, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Colombo National Museum', 'Museum', 4, '2025-10-08 23:31:48', '2025-10-10', 4800, 'QR_68e6a70c4874a', 'Paid', 1),
+(13, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Seethawaka Botanical Garden', 'Nature', 4, '2025-10-08 23:32:32', '2025-10-10', 8000, 'QR_68e6a7386d5c6', 'Paid', 1),
+(14, 'Domin Arachchi Athukoralage Mandira Chamath', 9090909, 'Mirijjawila Dry Zone Botanical Garden', 'Nature', 4, '2025-10-08 23:33:37', '2025-10-10', 8000, 'QR_68e6a779b2f9e', 'Paid', 1);
 
 -- --------------------------------------------------------
 
@@ -337,7 +371,16 @@ INSERT INTO `user` (`User_ID`, `Username`, `Email`, `Password`, `Phone_No`, `Use
 (9, 'cj2', 'cj2@gmail.com', '$2y$10$aV9..X6Fh0Y.0Olz69APr.JLlKifnNWf4y0RLu/6Ld7KurodtbMVO', '0713704931', '1759663148_download.png', 'User'),
 (10, 'cj3', 'cj3@gmail.com', '$2y$10$mhIJg86OJttpCHl4Nhn1cO3z8pPRVe5Ycy.E3dYV.OjBM2vqvuHHm', '0713704931', 'uploads/UserProfiles/user_1759735226_2edd809c341c.webp', 'User'),
 (12, 'Saman', 'saman@gmail.com', '$2y$10$D/gdW0uNVnD2nF16/bCOO.QjkLuGgNV3YCWPcjhNH3CVlYLbb4Wa.', '+94 71 370 4931', '', 'Driver'),
-(13, 'Saman', 'kasun@gmail.com', '$2y$10$WNSsqkNOw75LtbXAY0o6L.UOFGvyYOSuE3gS7B7B7GnweO06d8EZ2', '+94 71 370 4931', 'uploads/UserProfiles/user_1759735203_b373f275e2ec.jpg', 'Guide');
+(13, 'Saman', 'kasun@gmail.com', '$2y$10$WNSsqkNOw75LtbXAY0o6L.UOFGvyYOSuE3gS7B7B7GnweO06d8EZ2', '+94 71 370 4931', 'uploads/UserProfiles/user_1759735203_b373f275e2ec.jpg', 'Guide'),
+(14, 'Mahinda', 'mahinda@gmail.com', '$2y$10$4imbUR4yzMUFG5CsJtQLieXezAyQ779y5NjSYEIj1LnRaHS3zCqbS', '0776543845', '1760085764_3ab31f4585f7_driver.jpg', 'Driver'),
+(15, 'Namal', 'namal@gmail.com', '$2y$10$vwONVHwN.8Y/9LSu7/Ws2.TF0rvYZQucLyMpf5rI1mGzfTKjNLiKS', '077645624', '1760085885_d242356292c9_guide.jpg', 'Guide'),
+(16, 'Mahinda', 'mahinda@gmail.com', '$2y$10$rxGhzPOG73sXDz6K/USfq.U/IwT0b720lvqLQeQrgl6iOg34sJZ3O', '0776543845', '1760085927_a299d91cd30e_driver.jpg', 'Driver'),
+(17, 'Mahinda', 'mahinda@gmail.com', '$2y$10$LnFENwba7D4ND8.ufRBiQuHZZVcXsq7OyWGpae2.gbnq11w.6n1zC', '0776543845', '1760086426_81027474c935_driver.jpg', 'Driver'),
+(18, 'Mahinda', 'mahinda@gmail.com', '$2y$10$cKhDZ1O52tRtB12VxE5PZ.BANmk3CPOn0gcFhsUhddYmIWoXlVXKe', '0776543845', '1760086475_8ffb16dc78a6_driver.jpg', 'Driver'),
+(19, 'Mahinda', 'mahinda@gmail.com', '$2y$10$RUHnLphP5p74SalJ7Rrkee/Yab2K4YJ.pUT9kKcyd5d75PTzzK3WK', '0776543845', '1760088005_ddf4d04f1dfd_driver.jpg', 'Driver'),
+(20, 'Mahinda', 'mahinda@gmail.com', '$2y$10$9H68jYktA38OryWGDst3g.1J7qAPkRLQNAJ3jyokT3ac/5ZuToFsq', '0776543845', '1760088317_5b751e02d0a1_driver.jpg', 'Driver'),
+(21, 'Charana', 'charana@gmail.com', '$2y$10$NXdiZe24Dti7UEQeh/VQz.dF/WPzGQnH.Pie0lod2kP.Jdax8UoLe', '077563345', '1760088565_af42bcd2db5b_driver.jpg', 'Driver'),
+(22, 'madawa', 'madawa@gmail.com', '$2y$10$fvLN07CiVeJ4RNbWjMJcYuI8EnzEQORcljTJHLE6mtuD9MxS3dZAG', '0765674321', 'default.png', 'User');
 
 -- --------------------------------------------------------
 
@@ -368,7 +411,8 @@ INSERT INTO `vehicle` (`Vehicle_ID`, `Category`, `Price_Per_Day`, `Seating_Capac
 (15, 'Bike', '3000', 2, 'ATG-3899', 'Available', 1),
 (16, 'Mini_Car', '7000', 4, 'OKO-7788', 'Available', 1),
 (17, 'Mini_Car', '7000', 4, 'ZCV-0099', 'Available', 1),
-(18, 'Tuk', '4000', 3, 'qwe 2020', 'Available', 7);
+(18, 'Tuk', '4000', 3, 'qwe 2020', 'Available', 7),
+(19, 'Mini_Car', '7000', 4, 'caf4567', 'Available', 7);
 
 -- --------------------------------------------------------
 
@@ -385,6 +429,8 @@ CREATE TABLE `vehicle_rentals` (
   `Start_Date` date NOT NULL,
   `End_Date` date NOT NULL,
   `Start_Location` varchar(300) NOT NULL,
+  `Payment_Method` enum('Cash','Online') NOT NULL,
+  `Payment_Status` enum('Paid','Unpaid') NOT NULL,
   `Vehicle_ID` int(11) NOT NULL,
   `User_ID` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -393,15 +439,15 @@ CREATE TABLE `vehicle_rentals` (
 -- Dumping data for table `vehicle_rentals`
 --
 
-INSERT INTO `vehicle_rentals` (`Rental_ID`, `Name`, `Email`, `NIC_or_Pass`, `Phone_No`, `Start_Date`, `End_Date`, `Start_Location`, `Vehicle_ID`, `User_ID`) VALUES
-(14, 'test1', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 10, 1),
-(15, 'test2', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 11, 1),
-(16, 'test3', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 12, 1),
-(17, 'test4', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 13, 1),
-(18, 'test5', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 10, 1),
-(19, 'test6', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 11, 1),
-(20, 'test7', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 12, 1),
-(21, 'kaushal', 'kaushal@gmail.com', '200629101137', '773538444', '2025-09-24', '2025-09-24', 'kandy', 14, 1);
+INSERT INTO `vehicle_rentals` (`Rental_ID`, `Name`, `Email`, `NIC_or_Pass`, `Phone_No`, `Start_Date`, `End_Date`, `Start_Location`, `Payment_Method`, `Payment_Status`, `Vehicle_ID`, `User_ID`) VALUES
+(14, 'test1', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 'Cash', 'Paid', 10, 1),
+(15, 'test2', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 'Cash', 'Paid', 11, 1),
+(16, 'test3', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 'Cash', 'Paid', 12, 1),
+(17, 'test4', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-21', '2025-09-22', 'kandy', 'Cash', 'Paid', 13, 1),
+(18, 'test5', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 'Cash', 'Paid', 10, 1),
+(19, 'test6', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 'Cash', 'Paid', 11, 1),
+(20, 'test7', 'mandirachamath@gmail.com', '200629101137', '713704931', '2025-09-23', '2025-09-24', 'kandy', 'Cash', 'Paid', 12, 1),
+(21, 'kaushal', 'kaushal@gmail.com', '200629101137', '773538444', '2025-09-24', '2025-09-24', 'kandy', 'Cash', 'Paid', 14, 1);
 
 --
 -- Indexes for dumped tables
@@ -463,7 +509,9 @@ ALTER TABLE `guide`
 --
 ALTER TABLE `inquiry`
   ADD PRIMARY KEY (`Inquiry_ID`),
-  ADD KEY `User_ID` (`User_ID`);
+  ADD KEY `User_ID` (`User_ID`),
+  ADD KEY `Driver_ID` (`Driver_ID`),
+  ADD KEY `Guide_ID` (`Guide_ID`);
 
 --
 -- Indexes for table `itinerary`
@@ -542,7 +590,7 @@ ALTER TABLE `vehicle_rentals`
 -- AUTO_INCREMENT for table `bookings`
 --
 ALTER TABLE `bookings`
-  MODIFY `Booking_ID` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `Booking_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `booking_destinations`
@@ -566,13 +614,13 @@ ALTER TABLE `destination_imgs`
 -- AUTO_INCREMENT for table `driver`
 --
 ALTER TABLE `driver`
-  MODIFY `Driver_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `Driver_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `guide`
 --
 ALTER TABLE `guide`
-  MODIFY `Guide_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `Guide_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `inquiry`
@@ -614,13 +662,13 @@ ALTER TABLE `tickets`
 -- AUTO_INCREMENT for table `user`
 --
 ALTER TABLE `user`
-  MODIFY `User_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `User_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- AUTO_INCREMENT for table `vehicle`
 --
 ALTER TABLE `vehicle`
-  MODIFY `Vehicle_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `Vehicle_ID` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
 
 --
 -- AUTO_INCREMENT for table `vehicle_rentals`
@@ -675,7 +723,9 @@ ALTER TABLE `guide`
 -- Constraints for table `inquiry`
 --
 ALTER TABLE `inquiry`
-  ADD CONSTRAINT `inquiry_ibfk_1` FOREIGN KEY (`User_ID`) REFERENCES `user` (`User_ID`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD CONSTRAINT `inquiry_ibfk_1` FOREIGN KEY (`User_ID`) REFERENCES `user` (`User_ID`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `inquiry_ibfk_2` FOREIGN KEY (`Guide_ID`) REFERENCES `guide` (`Guide_ID`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `inquiry_ibfk_3` FOREIGN KEY (`Driver_ID`) REFERENCES `driver` (`Driver_ID`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `itinerary`
