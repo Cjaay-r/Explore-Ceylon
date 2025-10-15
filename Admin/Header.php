@@ -17,6 +17,11 @@ $res = $stmt->get_result();
 $u = $res->fetch_assoc();
 $type = $u ? strtolower(trim((string)$u['User_Type'])) : '';
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['logout'])) {
+    session_destroy();
+    header("Location: ../index.php");
+    exit;
+}
 ?>
 <style>
 :root{
@@ -66,7 +71,7 @@ $type = $u ? strtolower(trim((string)$u['User_Type'])) : '';
   flex-direction:column;
   gap:6px;
 }
-.menu a{
+.menu a, .menu button{
   display:flex;
   align-items:center;
   gap:10px;
@@ -74,10 +79,15 @@ $type = $u ? strtolower(trim((string)$u['User_Type'])) : '';
   border-radius:12px;
   color:var(--text);
   text-decoration:none;
+  background:none;
+  border:none;
+  text-align:left;
+  width:100%;
+  cursor:pointer;
   transition:transform .2s ease,background .2s ease,box-shadow .2s ease;
 }
-.menu a .ico{width:22px;text-align:center;opacity:.9}
-.menu a:hover{
+.menu a .ico, .menu button .ico{width:22px;text-align:center;opacity:.9}
+.menu a:hover, .menu button:hover{
   background:rgba(242,159,103,.15);
   transform:translateY(-1px);
   box-shadow:0 8px 18px rgba(15,23,42,.06);
@@ -96,8 +106,8 @@ $type = $u ? strtolower(trim((string)$u['User_Type'])) : '';
   .wrap{grid-template-columns:84px 1fr}
   .brand{font-size:0}
   .brand::after{content:"⚙️";font-size:20px;color:var(--dark)}
-  .menu a span:last-child{display:none}
-  .menu a{justify-content:center}
+  .menu a span:last-child, .menu button span:last-child{display:none}
+  .menu a, .menu button{justify-content:center}
 }
 </style>
 
@@ -112,8 +122,15 @@ $type = $u ? strtolower(trim((string)$u['User_Type'])) : '';
         <li><a href="ManageGuides.php"><span class="ico">🧭</span><span>Manage Guides</span></a></li>
         <li><a href="ManageDrivers.php"><span class="ico">🚗</span><span>Manage Drivers</span></a></li>
         <li><a href="ManageVehicles.php"><span class="ico">🚐</span><span>Manage Vehicles</span></a></li>
+        <li><a class="<?php echo basename($_SERVER['PHP_SELF'])==='ManageRentals.php'?'active':''; ?>" href="ManageRentals.php"><span class="ico">🔑</span><span>Manage Rentals</span></a></li>
+
         <li><a href="ManageBookings.php"><span class="ico">📆</span><span>Manage Bookings</span></a></li>
         <li><a href="ManageUsers.php"><span class="ico">👥</span><span>Manage Users</span></a></li>
+        <li>
+          <form method="post" style="margin:0;">
+            <button type="submit" name="logout"><span class="ico">🚪</span><span>Logout</span></button>
+          </form>
+        </li>
       </ul>
       <div class="foot">Explore Ceylon</div>
     </nav>
@@ -122,10 +139,14 @@ $type = $u ? strtolower(trim((string)$u['User_Type'])) : '';
       <div class="brand">Guide Panel</div>
       <ul class="menu">
         <li><a class="<?php echo basename($_SERVER['PHP_SELF'])==='GuideDashboard.php'?'active':''; ?>" href="GuideDashboard.php"><span class="ico">⚡</span><span>Dashboard</span></a></li>
-        <li><a href="GuideDashboard.php"><span class="ico">🏠</span><span>My Home</span></a></li>
-        <li><a href="GuideProfile.php"><span class="ico">👤</span><span>My Profile</span></a></li>
+        <li><a href="ProfileManager.php"><span class="ico">👤</span><span>My Profile</span></a></li>
         <li><a href="MyTrips.php"><span class="ico">🧳</span><span>My Trips</span></a></li>
         <li><a href="MyEarnings.php"><span class="ico">💰</span><span>My Earnings</span></a></li>
+        <li>
+          <form method="post" style="margin:0;">
+            <button type="submit" name="logout"><span class="ico">🚪</span><span>Logout</span></button>
+          </form>
+        </li>
       </ul>
       <div class="foot">Explore Ceylon</div>
     </nav>
@@ -133,11 +154,16 @@ $type = $u ? strtolower(trim((string)$u['User_Type'])) : '';
     <nav class="sidebar">
       <div class="brand">Driver Panel</div>
       <ul class="menu">
-        <li><a class="<?php echo basename($_SERVER['PHP_SELF'])==='DriverDashboard.php'?'active':''; ?>" href="../Driver/DriverDashboard.php"><span class="ico">🚗</span><span>Dashboard</span></a></li>
-        <li><a href="../Driver/MyTrips.php"><span class="ico">🗺️</span><span>My Trips</span></a></li>
-        <li><a href="../Driver/MyEarnings.php"><span class="ico">💸</span><span>My Earnings</span></a></li>
-        <li><a href="../Driver/Profile.php"><span class="ico">👤</span><span>My Profile</span></a></li>
-        <li><a href="../index.php"><span class="ico">🏠</span><span>Site</span></a></li>
+<li><a class="<?php echo basename($_SERVER['PHP_SELF'])==='GuideDashboard.php'?'active':''; ?>" href="GuideDashboard.php"><span class="ico">🚗</span><span>Dashboard</span></a></li>
+<li><a href="MyTrips.php"><span class="ico">🗺️</span><span>My Trips</span></a></li>
+<li><a href="MyEarnings.php"><span class="ico">💸</span><span>My Earnings</span></a></li>
+<li><a href="ProfileManager.php"><span class="ico">👤</span><span>My Profile</span></a></li>
+
+        <li>
+          <form method="post" style="margin:0;">
+            <button type="submit" name="logout"><span class="ico">🚪</span><span>Logout</span></button>
+          </form>
+        </li>
       </ul>
       <div class="foot">Explore Ceylon</div>
     </nav>
@@ -146,7 +172,13 @@ $type = $u ? strtolower(trim((string)$u['User_Type'])) : '';
       <div class="brand">Staff</div>
       <ul class="menu">
         <li><a href="../index.php"><span class="ico">🏠</span><span>Home</span></a></li>
+        <li>
+          <form method="post" style="margin:0;">
+            <button type="submit" name="logout"><span class="ico">🚪</span><span>Logout</span></button>
+          </form>
+        </li>
       </ul>
       <div class="foot">Explore Ceylon</div>
     </nav>
+    
   <?php endif; ?>

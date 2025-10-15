@@ -141,6 +141,6 @@ $customersCount    = count_table($conn, "SELECT COUNT(*) FROM user WHERE LOWER(U
       });
     }
   </script>
-
+  <?php include __DIR__ . '/../Includes/message.php'; ?>
 </body>
 </html>
