@@ -88,7 +88,7 @@ function save_one_upload(array $file): array {
 }
 
 function fetch_package($mysqli,$id){
-  $stmt=$mysqli->prepare("SELECT Package_ID, Name, Subtitle, Description, Long_Des, DurationDays, Price, Root_img FROM packages WHERE Package_ID=?");
+  $stmt=$mysqli->prepare("SELECT Package_ID, Name, Subtitle, Description, Long_Des, DurationDays, Price, Root_img, Guide_Percentage, Driver_Percentage FROM packages WHERE Package_ID=?");
   $stmt->bind_param("i",$id); $stmt->execute(); $res=$stmt->get_result(); $row=$res->fetch_assoc(); $stmt->close(); return $row;
 }
 function fetch_images($mysqli,$pkgId){
@@ -125,6 +125,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     $Duration    = to_int_or_null($_POST['duration'] ?? null);
     $Price       = to_float_or_null($_POST['price'] ?? null);
 
+    // NEW: read percentages (nullable, allow 0..100)
+    $GuidePct    = to_float_or_null($_POST['guide_percentage'] ?? null);
+    $DriverPct   = to_float_or_null($_POST['driver_percentage'] ?? null);
+
     if($Name==='' || $Description==='' || $Duration===null || $Price===null){
       $error = "Please fill required fields: Name, Short Description, Duration, Price.";
       $mode = ($action==='create') ? 'list' : 'edit';
@@ -145,8 +149,9 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       if(!$error){
         if($action==='create'){
           if($rootPath===null) $rootPath = '';
-          $stmt=$mysqli->prepare("INSERT INTO packages (Name, Subtitle, Description, Long_Des, DurationDays, Price, Root_img, User_ID) VALUES (?,?,?,?,?,?,?,1)");
-          $stmt->bind_param("ssssids", $Name, $Subtitle, $Description, $Long_Des, $Duration, $Price, $rootPath);
+          // INSERT now includes Guide_Percentage, Driver_Percentage
+          $stmt=$mysqli->prepare("INSERT INTO packages (Name, Subtitle, Description, Long_Des, DurationDays, Price, Guide_Percentage, Driver_Percentage, Root_img, User_ID) VALUES (?,?,?,?,?,?,?,?,?,?)");
+          $stmt->bind_param("ssssiddssi", $Name, $Subtitle, $Description, $Long_Des, $Duration, $Price, $GuidePct, $DriverPct, $rootPath, $uid);
           if($stmt->execute()){
             $newId = $stmt->insert_id;
             $stmt->close();
@@ -196,11 +201,13 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
           if($id===null){ $error="Missing package id."; $mode='list'; }
           else {
             if($rootPath!==null){
-              $stmt=$mysqli->prepare("UPDATE packages SET Name=?, Subtitle=?, Description=?, Long_Des=?, DurationDays=?, Price=?, Root_img=? WHERE Package_ID=?");
-              $stmt->bind_param("ssssidsi",$Name,$Subtitle,$Description,$Long_Des,$Duration,$Price,$rootPath,$id);
+              // UPDATE with Root_img, includes percentages
+              $stmt=$mysqli->prepare("UPDATE packages SET Name=?, Subtitle=?, Description=?, Long_Des=?, DurationDays=?, Price=?, Guide_Percentage=?, Driver_Percentage=?, Root_img=? WHERE Package_ID=?");
+              $stmt->bind_param("ssssiddssi",$Name,$Subtitle,$Description,$Long_Des,$Duration,$Price,$GuidePct,$DriverPct,$rootPath,$id);
             } else {
-              $stmt=$mysqli->prepare("UPDATE packages SET Name=?, Subtitle=?, Description=?, Long_Des=?, DurationDays=?, Price=? WHERE Package_ID=?");
-              $stmt->bind_param("ssssidi",$Name,$Subtitle,$Description,$Long_Des,$Duration,$Price,$id);
+              // UPDATE without touching Root_img, includes percentages
+              $stmt=$mysqli->prepare("UPDATE packages SET Name=?, Subtitle=?, Description=?, Long_Des=?, DurationDays=?, Price=?, Guide_Percentage=?, Driver_Percentage=? WHERE Package_ID=?");
+              $stmt->bind_param("ssssiddsi",$Name,$Subtitle,$Description,$Long_Des,$Duration,$Price,$GuidePct,$DriverPct,$id);
             }
             if($stmt->execute()){
               $stmt->close();
@@ -354,6 +361,18 @@ $counts = count_related($mysqli);
                   </div>
                 </div>
 
+                <!-- NEW: Percentages (keeps UI minimal; same styling) -->
+                <div class="row g-3 mt-1">
+                  <div class="col">
+                    <label class="form-label">Guide Percentage (%)</label>
+                    <input type="number" name="guide_percentage" step="0.01" min="0" max="100" class="form-control">
+                  </div>
+                  <div class="col">
+                    <label class="form-label">Driver Percentage (%)</label>
+                    <input type="number" name="driver_percentage" step="0.01" min="0" max="100" class="form-control">
+                  </div>
+                </div>
+
                 <div class="mb-3 mt-3">
                   <label class="form-label">Long Description</label>
                   <textarea name="long_des" class="form-control" rows="5"></textarea>
@@ -436,7 +455,7 @@ $counts = count_related($mysqli);
 
     <?php elseif($mode==='create' || $mode==='edit' || $mode==='images' || $mode==='itinerary'): 
         $editing = ($mode!=='create');
-        $row = ['Package_ID'=>null,'Name'=>'','Subtitle'=>'','Description'=>'','Long_Des'=>'','DurationDays'=>'','Price'=>'','Root_img'=>''];
+        $row = ['Package_ID'=>null,'Name'=>'','Subtitle'=>'','Description'=>'','Long_Des'=>'','DurationDays'=>'','Price'=>'','Root_img'=>'','Guide_Percentage'=>null,'Driver_Percentage'=>null];
         $existingImgs=[]; $existingIt=[]; $pid=null;
         if($editing){
           if(!$pkgId){ echo '<div class="alert alert-danger">Missing package id.</div>'; $mode='list'; }
@@ -493,6 +512,16 @@ $counts = count_related($mysqli);
                 <input type="number" class="form-control" name="price" step="0.01" min="0" required value="<?php echo h($row['Price']); ?>">
               </div>
 
+              <!-- NEW: Percentages (edit form) -->
+              <div class="col-md-3">
+                <label class="form-label">Guide Percentage (%)</label>
+                <input type="number" class="form-control" name="guide_percentage" step="0.01" min="0" max="100" value="<?php echo h($row['Guide_Percentage']); ?>">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Driver Percentage (%)</label>
+                <input type="number" class="form-control" name="driver_percentage" step="0.01" min="0" max="100" value="<?php echo h($row['Driver_Percentage']); ?>">
+              </div>
+
               <div class="col-12">
                 <label class="form-label">Short Description *</label>
                 <textarea class="form-control" name="description" rows="3" required><?php echo h($row['Description']); ?></textarea>
@@ -542,7 +571,7 @@ $counts = count_related($mysqli);
                                   <div class="col-12 col-md-4">
                                     <label class="form-label">Location</label>
                                     <input type="text" class="form-control" name="location[]" value="'.h($it['Location']).'">
-                                  </div>
+                                  </div><br><br>
                                   <div class="col-12 col-md-5">
                                     <label class="form-label">Description</label>
                                     <input type="text" class="form-control" name="it_desc[]" value="'.h($it['Description']).'">

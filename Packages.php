@@ -18,14 +18,15 @@ $result = $conn->query($sql);
   <title>Sri Lanka Tourism Packages</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background-color: #f9f9f9;
     }
     .hero {
-      background: url('https://www.srilanka.travel/image/cache/catalog/banner1-1600x700.jpg') no-repeat center center/cover;
-      height: 60vh;
+      background: url('Images/about topic bimg.jpg') no-repeat center center/cover;
+      height: 35vh;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -90,6 +91,7 @@ $result = $conn->query($sql);
   </style>
 </head>
 <body>
+<?php include __DIR__ . '/Includes/header.php'; ?>
 
   <!-- Hero Section -->
   <section class="hero">
@@ -115,7 +117,7 @@ $result = $conn->query($sql);
               <div class="card-body">
                 <h5 class="card-title"><?= htmlspecialchars($row['Name']) ?></h5>
                 <p class="card-text"><?= htmlspecialchars($row['Description']) ?></p>
-                <p class="price">From Rs.<?= number_format($row['Price'], 2) ?></p>
+                <p class="price">From $<?= number_format($row['Price'], 2) ?></p>
                 <!-- Updated link -->
                 <a href="Package_Info.php?id=<?= $row['Package_ID'] ?>" class="btn btn-primary w-100">Explore more</a>
               </div>
@@ -128,10 +130,7 @@ $result = $conn->query($sql);
     </div>
   </div>
 
-  <!-- Footer -->
-  <footer class="bg-primary text-white text-center py-3">
-    <p class="mb-0">&copy; 2025 Sri Lanka Tourism. All Rights Reserved.</p>
-^  </footer>
+  <?php include __DIR__ . '/Includes/footer.php'; ?>
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
