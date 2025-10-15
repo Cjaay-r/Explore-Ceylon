@@ -1,0 +1,136 @@
+body {
+    background-color: #f8f9fa;
+    font-family: 'Poppins', Arial, sans-serif;
+    color: #333;
+    overflow-x: hidden;
+}
+
+/* Hero section */
+.topic {
+    position: relative;
+    width: 100%;
+    height: 260px;
+    background: url('../Images/Destination topic bimg.jpg') no-repeat center center/cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: white;
+    overflow: hidden;
+}
+
+.topic-overlay {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(0, 34, 51, 0.6);
+    z-index: 1;
+}
+
+.text {
+    position: relative;
+    z-index: 2;
+    max-width: 90%;
+    animation: fadeSlideDown 1.5s ease-out;
+}
+
+.text h1 {
+    font-size: 3rem;
+    font-weight: 700;
+    animation: zoomIn 1.2s ease-in-out;
+}
+
+.text p {
+    font-size: 1.1rem;
+    color: #f1f1f1;
+    animation: fadeIn 2s ease-in;
+}
+
+@keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes zoomIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Destination cards */
+.destination-card {
+    overflow: hidden;
+    border-radius: 15px;
+    background: #fff;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.destination-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.destination-img {
+    height: 250px;
+    object-fit: cover;
+    transition: transform 1.2s ease;
+}
+
+.destination-card:hover .destination-img {
+    transform: scale(1.05);
+}
+
+.destination-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #0077b6;
+}
+
+/* Carousel transitions */
+.carousel-item {
+    opacity: 0;
+    transition: opacity 1s ease-in-out, transform 6s ease-in-out !important;
+}
+
+.carousel-item.active {
+    opacity: 1;
+    transform: scale(1.05);
+    z-index: 2;
+}
+
+.carousel-control-prev-icon,
+.carousel-control-next-icon {
+    filter: invert(100%);
+}
+
+/* Weather text */
+.weather {
+    font-style: italic;
+    transition: opacity 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .text h1 {
+        font-size: 2rem;
+    }
+    .text p {
+        font-size: 0.95rem;
+    }
+    .destination-img {
+        height: 200px;
+    }
+}
+
+@media (max-width: 576px) {
+    .destination-title {
+        font-size: 1.1rem;
+    }
+    .card-text {
+        font-size: 0.9rem;
+    }
+}
