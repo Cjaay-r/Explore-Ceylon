@@ -1,0 +1,34 @@
+body{background:#f6f7fb}
+.container-narrow{max-width:1100px}
+.table td,.table th{vertical-align:middle}
+.table>:not(caption)>*>*{padding:.65rem .8rem}
+.table-light th{background:#f3f4f6}
+.badge-soft{background:rgba(13,110,253,.1);color:#0d6efd;border-radius:999px;padding:.25rem .6rem;font-weight:600}
+.alert{margin:16px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;margin-bottom:18px}
+.card .card-body{padding:0}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.btn{border:1px solid #cbd5e1;border-radius:10px;padding:8px 12px;background:#fff}
+.btn.ghost{background:transparent;color:#334155;border-color:#475569}
+.btn.primary{background:#0ea5e9;border-color:#0ea5e9;color:#001b2b}
+.main{padding:24px}
+:root{--panel:#ffffff;--panel-2:#f9fafc;--text:#1e1e2c;--muted:#5b6576;--primary:#f29f67;--blue:#3b8ff3}
+*{box-sizing:border-box}
+.wrap{display:grid;grid-template-columns:280px 1fr;min-height:100dvh}
+.sidebar{background:linear-gradient(180deg,var(--panel),var(--panel-2));border-right:1px solid rgba(2,6,23,.08);padding:22px 16px;position:sticky;top:0;height:100dvh;display:flex;flex-direction:column;gap:18px}
+.brand{font-weight:700;font-size:20px;display:flex;align-items:center;gap:10px;color:var(--primary)}
+.menu{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.menu a{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;color:var(--text);text-decoration:none;transition:transform .2s ease,background .2s ease,box-shadow .2s ease}
+.menu a .ico{width:22px;text-align:center;opacity:.9}
+.menu a:hover{background:rgba(242,159,103,.15);transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.06)}
+.menu a.active{background:linear-gradient(180deg,rgba(242,159,103,.2),rgba(59,143,243,.15));outline:1px solid rgba(2,6,23,.06);box-shadow:inset 0 0 0 1px rgba(2,6,23,.03),0 12px 26px rgba(15,23,42,.08)}
+.foot{margin-top:auto;font-size:12px;color:var(--muted)}
+@media(max-width:880px){
+  .wrap{grid-template-columns:84px 1fr}
+  .brand{font-size:0}
+  .brand::after{content:"⚙️";font-size:20px;color:#1e1e2c}
+  .menu a span:last-child{display:none}
+  .menu a{justify-content:center}
+}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:10px}
+

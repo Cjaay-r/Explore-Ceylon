@@ -1,4 +1,4 @@
-;<?php
+<?php
 session_start();
 require_once __DIR__ . '/../Includes/config.php';
 require_once __DIR__ . '/../Includes/dbconnect.php';
@@ -47,6 +47,22 @@ function guide_profile_src($val) {
     return url('uploads/UserProfiles/' . $v);
 }
 
+$languagesMaster = ['English','Sinhala','Tamil','Hindi','French','German','Italian','Spanish','Arabic','Chinese','Japanese','Russian'];
+
+function save_languages($conn, $guideId, $langs) {
+    $del = $conn->prepare("DELETE FROM language WHERE Guide_ID=?");
+    $del->bind_param("i", $guideId);
+    $del->execute();
+    if (!$langs || !is_array($langs)) return;
+    $ins = $conn->prepare("INSERT INTO language (Language, Guide_ID) VALUES (?, ?)");
+    foreach ($langs as $lg) {
+        $lang = trim((string)$lg);
+        if ($lang === '') continue;
+        $ins->bind_param("si", $lang, $guideId);
+        $ins->execute();
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'create') {
@@ -59,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $NIC_or_Pass = trim($_POST['NIC_or_Pass'] ?? '');
         $Description = trim($_POST['Description'] ?? '');
         $Status = trim($_POST['Status'] ?? '');
+        $Price_Per_Day = isset($_POST['Price_Per_Day']) ? (float)$_POST['Price_Per_Day'] : 0;
+        $Langs = $_POST['Languages'] ?? [];
         if ($Username === '' || $Email === '' || $Password === '' || $Phone_No === '' || $F_Name === '' || $L_Name === '' || $NIC_or_Pass === '' || $Status === '') {
             $errors[] = 'All required fields must be filled.';
         } else {
@@ -67,11 +85,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $conn->prepare("INSERT INTO user (Username, Email, Password, Phone_No, User_Profile, User_Type) VALUES (?, ?, ?, ?, ?, 'Guide')");
             $stmt->bind_param("sssss", $Username, $Email, $hash, $Phone_No, $User_Profile);
             if ($stmt->execute()) {
-                $uid = $stmt->insert_id;
+                $uidNew = $stmt->insert_id;
                 $ratingDefault = 5.0;
-                $stmt2 = $conn->prepare("INSERT INTO guide (F_Name, L_Name, NIC_or_Pass, Description, Status, Rating, User_ID) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt2->bind_param("sssssdi", $F_Name, $L_Name, $NIC_or_Pass, $Description, $Status, $ratingDefault, $uid);
+                $stmt2 = $conn->prepare("INSERT INTO guide (F_Name, L_Name, NIC_or_Pass, Description, Status, Rating, Price_per_Day, User_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt2->bind_param("sssssddi", $F_Name, $L_Name, $NIC_or_Pass, $Description, $Status, $ratingDefault, $Price_Per_Day, $uidNew);
                 if ($stmt2->execute()) {
+                    $guideId = $stmt2->insert_id;
+                    $valid = array_values(array_intersect($Langs, $languagesMaster));
+                    save_languages($conn, $guideId, $valid);
                     $success = 'Guide created.';
                 } else {
                     $errors[] = 'Failed creating guide.';
@@ -90,6 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $L_Name = trim($_POST['L_Name'] ?? '');
         $NIC_or_Pass = trim($_POST['NIC_or_Pass'] ?? '');
         $Description = trim($_POST['Description'] ?? '');
+        $Price_Per_Day = isset($_POST['Price_Per_Day']) ? (float)$_POST['Price_Per_Day'] : 0;
+        $Langs = $_POST['Languages'] ?? [];
         if (!$Guide_ID || !$User_ID || $Username === '' || $Email === '' || $Phone_No === '' || $F_Name === '' || $L_Name === '' || $NIC_or_Pass === '') {
             $errors[] = 'All required fields must be filled.';
         } else {
@@ -102,9 +125,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->bind_param("sssi", $Username, $Email, $Phone_No, $User_ID);
             }
             $ok1 = $stmt->execute();
-            $stmt2 = $conn->prepare("UPDATE guide SET F_Name=?, L_Name=?, NIC_or_Pass=?, Description=? WHERE Guide_ID=?");
-            $stmt2->bind_param("ssssi", $F_Name, $L_Name, $NIC_or_Pass, $Description, $Guide_ID);
+            $stmt2 = $conn->prepare("UPDATE guide SET F_Name=?, L_Name=?, NIC_or_Pass=?, Description=?, Price_per_Day=? WHERE Guide_ID=?");
+            $stmt2->bind_param("ssssdi", $F_Name, $L_Name, $NIC_or_Pass, $Description, $Price_Per_Day, $Guide_ID);
             $ok2 = $stmt2->execute();
+            $valid = array_values(array_intersect($Langs, $languagesMaster));
+            save_languages($conn, $Guide_ID, $valid);
             if ($ok1 && $ok2) $success = 'Guide updated.'; else $errors[] = 'Update failed.';
         }
     } elseif ($action === 'delete') {
@@ -117,9 +142,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$guideLangs = [];
+$lgq = $conn->query("SELECT Guide_ID, GROUP_CONCAT(Language ORDER BY Language) AS Langs FROM language GROUP BY Guide_ID");
+if ($lgq) {
+    while ($lr = $lgq->fetch_assoc()) {
+        $guideLangs[(int)$lr['Guide_ID']] = $lr['Langs'] ? explode(',', $lr['Langs']) : [];
+    }
+}
+
 $rows = [];
-$q = $conn->query("SELECT g.*, u.Username, u.Email, u.Phone_No, u.User_Profile, u.User_ID FROM guide g LEFT JOIN user u ON g.User_ID=u.User_ID ORDER BY g.Guide_ID DESC");
-while ($r = $q->fetch_assoc()) $rows[] = $r;
+$search = trim($_GET['q'] ?? '');
+if ($search !== '') {
+    $idTry = ctype_digit($search) ? (int)$search : 0;
+    $like = '%' . $search . '%';
+    $stmt = $conn->prepare("SELECT g.*, u.Username, u.Email, u.Phone_No, u.User_Profile, u.User_ID FROM guide g LEFT JOIN user u ON g.User_ID=u.User_ID WHERE g.Guide_ID=? OR g.F_Name LIKE ? OR g.L_Name LIKE ? OR CONCAT(g.F_Name,' ',g.L_Name) LIKE ? OR u.Username LIKE ? ORDER BY g.Guide_ID DESC");
+    $stmt->bind_param("issss", $idTry, $like, $like, $like, $like);
+    $stmt->execute();
+    $result = $stmt->get_result();
+} else {
+    $result = $conn->query("SELECT g.*, u.Username, u.Email, u.Phone_No, u.User_Profile, u.User_ID FROM guide g LEFT JOIN user u ON g.User_ID=u.User_ID ORDER BY g.Guide_ID DESC");
+}
+while ($r = $result->fetch_assoc()) $rows[] = $r;
 ?>
 <!doctype html>
 <html lang="en">
@@ -137,7 +180,13 @@ while ($r = $q->fetch_assoc()) $rows[] = $r;
 <main class="main">
   <div class="topbar">
     <h1>Manage Guides</h1>
-    <button class="btn primary" data-bs-toggle="modal" data-bs-target="#createModal">Add Guide</button>
+    <div class="d-flex align-items-center gap-2">
+      <form class="d-flex" method="get">
+        <input class="form-control" name="q" placeholder="Search by ID, name, or username" value="<?= htmlspecialchars($search) ?>">
+        <button class="btn primary ms-2">Search</button>
+      </form>
+      <button class="btn primary" data-bs-toggle="modal" data-bs-target="#createModal">Add Guide</button>
+    </div>
   </div>
 
   <?php if ($success): ?>
@@ -156,6 +205,7 @@ while ($r = $q->fetch_assoc()) $rows[] = $r;
             <th>Guide</th>
             <th>NIC/Passport</th>
             <th>Availability</th>
+            <th>Price/Day</th>
             <th>User</th>
             <th class="text-end">Actions</th>
           </tr>
@@ -175,6 +225,7 @@ while ($r = $q->fetch_assoc()) $rows[] = $r;
             </td>
             <td><?= htmlspecialchars($row['NIC_or_Pass']) ?></td>
             <td><span class="badge-soft"><?= htmlspecialchars($row['Status']) ?></span></td>
+            <td><?= htmlspecialchars(number_format((float)($row['Price_per_Day'] ?? 0), 2)) ?></td>
             <td>
               <div class="small"><?= htmlspecialchars($row['Username']) ?></div>
               <div class="text-muted small"><?= htmlspecialchars($row['Email']) ?> • <?= htmlspecialchars($row['Phone_No']) ?></div>
@@ -223,6 +274,26 @@ while ($r = $q->fetch_assoc()) $rows[] = $r;
                       <div class="col-12">
                         <label class="form-label">Description</label>
                         <textarea name="Description" class="form-control" rows="3"><?= htmlspecialchars($row['Description']) ?></textarea>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label">Price per day</label>
+                        <input type="number" step="0.01" name="Price_Per_Day" class="form-control" value="<?= htmlspecialchars((string)($row['Price_per_Day'] ?? '')) ?>">
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label">Languages</label>
+                        <div class="lang-grid">
+                          <?php
+                            $sel = $guideLangs[(int)$row['Guide_ID']] ?? [];
+                            foreach ($languagesMaster as $opt):
+                              $checked = in_array($opt, $sel) ? 'checked' : '';
+                              $id = 'e'.$row['Guide_ID'].'_'.preg_replace('/[^A-Za-z0-9]+/','',$opt);
+                          ?>
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="Languages[]" value="<?= htmlspecialchars($opt) ?>" id="<?= htmlspecialchars($id) ?>" <?= $checked ?>>
+                            <label class="form-check-label" for="<?= htmlspecialchars($id) ?>"><?= htmlspecialchars($opt) ?></label>
+                          </div>
+                          <?php endforeach; ?>
+                        </div>
                       </div>
                       <div class="col-12">
                         <label class="form-label">Rating</label>
@@ -314,6 +385,23 @@ while ($r = $q->fetch_assoc()) $rows[] = $r;
               <label class="form-label">Description</label>
               <textarea name="Description" class="form-control" rows="3"></textarea>
             </div>
+            <div class="col-md-6">
+              <label class="form-label">Price per day</label>
+              <input type="number" step="0.01" name="Price_Per_Day" class="form-control">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Languages</label>
+              <div class="lang-grid">
+                <?php foreach ($languagesMaster as $opt):
+                  $id = 'c_'.preg_replace('/[^A-Za-z0-9]+/','',$opt);
+                ?>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="Languages[]" value="<?= htmlspecialchars($opt) ?>" id="<?= htmlspecialchars($id) ?>">
+                  <label class="form-check-label" for="<?= htmlspecialchars($id) ?>"><?= htmlspecialchars($opt) ?></label>
+                </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
             <hr class="mt-3">
             <div class="col-md-4">
               <label class="form-label">Username</label>
@@ -348,11 +436,3 @@ while ($r = $q->fetch_assoc()) $rows[] = $r;
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
