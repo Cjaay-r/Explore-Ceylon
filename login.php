@@ -5,7 +5,7 @@ require_once __DIR__ . '/Includes/dbconnect.php';
 function redirect_by_role($type) {
     if ($type === 'Admin') return 'Admin/AdminDashboard.php';
     if ($type === 'Guide') return 'Admin/GuideDashboard.php';
-    if ($type === 'Driver') return 'Admin/DriverDashboard.php';
+    if ($type === 'Driver') return 'Admin/GuideDashboard.php';
     return 'index.php';
 }
 
@@ -28,9 +28,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $profile = 'default.png';
         $user_type = 'User';
 
-        if ($password !== $confirm_password) {
+        // Basic required field validation
+        if (empty($username) || empty($email) || empty($phone) || empty($password) || empty($confirm_password)) {
+            $error = "All fields are required.";
+        }
+        // Password confirmation check
+        elseif ($password !== $confirm_password) {
             $error = "Passwords do not match.";
-        } else {
+        }
+        // Password strength validation
+        elseif (
+            strlen($password) < 8 ||
+            !preg_match("/[A-Z]/", $password) ||
+            !preg_match("/[0-9]/", $password) ||
+            !preg_match("/[!@#$%^&*(),.?\":{}|<>]/", $password)
+        ) {
+            $error = "Password must be at least 8 characters long and include an uppercase letter, a number, and a special character.";
+        }
+        else {
             $stmt = $conn->prepare("SELECT * FROM user WHERE Email=?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
@@ -67,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['Username']  = $user['Username'];
                 $_SESSION['User_Type'] = $user['User_Type'];
                 $dest = redirect_by_role($user['User_Type']);
-                header("Location: $dest");
+                echo "<script>alert('Login successful!'); window.location.href = " . json_encode($dest) . ";</script>";
                 exit;
             } else {
                 $error = "Incorrect password.";
@@ -103,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <input type="text" name="email" placeholder="Email or Username" required />
           <input type="password" name="password" placeholder="Password" required />
           <button type="submit" name="login" class="submit-bt">Login</button>
-          <button type="button" class="toggle-btn" onclick="showRegister()">Don\'t have an account? Register</button>
+          <button type="button" class="toggle-btn" onclick="showRegister()">Don't have an account? Register</button>
         </form>
       </div>
 
@@ -112,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <h2>Register</h2>
           <input type="text" name="username" placeholder="Username" required />
           <input type="email" name="email" placeholder="Email" required />
-          <input type="tel" name="phone" placeholder="Contact Number"/>
+          <input type="tel" name="phone" placeholder="Contact Number" required />
           <input type="password" name="password" placeholder="Password" required />
           <input type="password" name="confirm_password" placeholder="Confirm Password" required />
           <button type="submit" name="register" class="submit-bt">Register</button>

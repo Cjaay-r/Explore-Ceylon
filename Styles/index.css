@@ -19,10 +19,10 @@ body::before{
   z-index:-1; opacity:.9;
 }
 
-main { padding-top: 190px; }
+
 
 /* ========== HERO (s1) ========== */
-.s1 { padding:120px 20px 60px; text-align:center; color:#fff; min-height:70vh; }
+.s1 { padding: 60px; text-align:center; color:#fff; min-height:70vh; }
 .s1 .subheading{ font-size:22px; font-style:italic; font-family:'Segoe Script', cursive; margin-bottom:10px; color:#fff; text-shadow:1px 1px 4px rgba(0,0,0,.5);}
 .s1 h1{ font-size:60px; font-weight:800; margin-bottom:30px; text-shadow:2px 2px 8px rgba(0,0,0,.4);}
 
@@ -40,6 +40,44 @@ main { padding-top: 190px; }
 .search-btn{ background:#00bcd4; color:#fff; border:none; padding:12px 25px; border-radius:8px; font-size:15px; cursor:pointer; transition:.3s; opacity:0; transform:translateY(50px);}
 .search-btn:hover{ background:#0097a7;}
 .filter-item.show, .search-btn.show{ opacity:1; transform:translateX(0) translateY(0);}
+
+/* Search enhancements (new) */
+.destination-filter .filter-item select,
+.destination-filter .filter-item input{
+  height:38px;
+  line-height:38px;
+  width:100%;
+  border:none;
+  background:transparent;
+  outline:none;
+  font-size:14px;
+  color:#222;
+}
+.destination-filter .filter-item input::placeholder{ color:#7a7a7a; }
+.destination-filter .filter-item input[readonly]{
+  background:transparent;
+  color:#333;
+  cursor:default;
+}
+.destination-filter .filter-item:focus-within{
+  background:#e9f7f9;
+  box-shadow:0 0 0 2px rgba(0,188,212,.25) inset;
+}
+.destination-filter .filter-item i{
+  flex:0 0 auto;
+  font-size:16px;
+}
+.destination-filter .search-btn{
+  min-width:140px;
+  padding:12px 28px;
+  font-weight:600;
+  box-shadow:0 6px 14px rgba(0,188,212,.25);
+}
+@media (max-width: 640px){
+  .destination-filter{ padding:16px; gap:10px; }
+  .destination-filter .filter-item{ flex:1 1 100%; }
+  .destination-filter .search-btn{ width:100%; }
+}
 
 /* ========== INFO (s2) ========== */
 .information{ background:#fff; text-align:center; padding:100px 40px;}
@@ -91,7 +129,7 @@ main { padding-top: 190px; }
 .s5 h1{ color:#0b3c5d; font-size:36px; margin-bottom:10px; position:relative;}
 .s5 h1:after{ content:""; position:absolute; bottom:-10px; left:50%; transform:translateX(-50%); width:50px; height:2px; background:#0b3c5d;}
 .s5 .subheading{ color:#5e7d9a; font-size:18px; margin-bottom:10px;}
-.s5 .description{ color:#5e7d9a; font-size:14px; margin-bottom:20px;}
+.s5 .description{ color:#5e7d9a; font-size:14px; margin-bottom:20px; }
 
 /* rail wrapper keeps overflow clean */
 .packages-wrapper{
@@ -149,10 +187,10 @@ main { padding-top: 190px; }
 
 /* body */
 .package-body{ padding:16px 18px 8px; min-height:150px; }
-.package-title{ font-size:20px; color:#111; margin:2px 0 6px; }
-.package-desc{ color:#555; font-size:14px; line-height:1.45; margin-bottom:10px; min-height:42px; }
+.package-title{ font-size:20px; color:#111; margin:2px 0 6px; text-align: justify;}
+.package-desc{ color:#555; font-size:14px; line-height:1.45; margin-bottom:10px; min-height:42px; text-align: justify;}
 .package-price{ font-size:16px; color:#222; margin-top:8px; font-weight:600; }
-.package-price span{ color:#1967ff; font-weight:800; }
+.package-price span{ color:#1967ff; font-weight:800;}
 
 /* button */
 .pkg-btn{

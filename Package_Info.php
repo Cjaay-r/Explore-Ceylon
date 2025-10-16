@@ -60,6 +60,7 @@ $itineraryResult = $itineraryStmt->get_result();
   </style>
 </head>
 <body>
+  <?php include __DIR__ . '/Includes/header.php'; ?>
   <div class="container">
     <?php if (!$package): ?>
       <div class="alert alert-warning">Package not found.</div>
@@ -112,8 +113,8 @@ $itineraryResult = $itineraryStmt->get_result();
           <div class="card">
             <h3><?= htmlspecialchars($package['Name']) ?></h3>
             <p>Duration: <?= (int)$package['DurationDays'] ?> Days</p>
-            <p class="fw-bold text-primary">Price: Rs.<?= number_format((float)$package['Price'], 2) ?></p>
-            <a href="booking_package.php?id=<?= (int)$package['Package_ID'] ?>" class="btn">Book Now</a>
+            <p class="fw-bold text-primary">Price: $.<?= number_format((float)$package['Price'], 2) ?></p>
+            <a href="BookingPackage.php?id=<?= (int)$package['Package_ID'] ?>" class="btn">Book Now</a>
           </div>
           <div class="card">
             <img src="<?= htmlspecialchars($package['Root_img']) ?>" alt="Package Image" class="img-fluid">

@@ -1,12 +1,13 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) {
-  session_start();
+    session_start();
 }
 require_once __DIR__ . '/Includes/dbconnect.php';
 require_once __DIR__ . '/Includes/auth.php';
 
+
 $packages = [];
-$pkg_sql = "SELECT Package_ID, Name, Root_img, DurationDays, Description, Price FROM packages ORDER BY Package_ID ASC";
+$pkg_sql = "SELECT Package_ID, Name, Subtitle, Root_img, DurationDays, Description, Price FROM packages ORDER BY Package_ID ASC";
 if ($pkg_res = $conn->query($pkg_sql)) {
     while ($row = $pkg_res->fetch_assoc()) {
         $packages[] = $row;
@@ -32,46 +33,35 @@ if ($pkg_res = $conn->query($pkg_sql)) {
       <p class="subheading">Get unforgettable pleasure with us</p>
       <h1>Welcome To <br> Explore Ceylon</h1>
       <div class="cta-buttons">
-        <a href="#" class="explore-btn">Explore Tours <i class="fa fa-arrow-right"></i></a>
-        <a href="#" class="our-services-btn">Our Services <i class="fa fa-arrow-right"></i></a>
+        <a href="Packages.php" class="explore-btn">Explore Tours <i class="fa fa-arrow-right"></i></a>
+        <a href="Services.php" class="our-services-btn">Our Services <i class="fa fa-arrow-right"></i></a>
       </div>
 
       <div class="destination-filter">
         <div class="filter-item">
           <i class="fa fa-map-marker"></i>
-          <select>
-            <option>Sigiriya</option>
-            <option>Polonnaruwa</option>
-            <option>Temple of tooth relic</option>
-            <option>Bundala</option>
+          <select id="pkgSelect">
+            <option value="">Select Package</option>
+            <?php foreach ($packages as $p): ?>
+              <option value="<?php echo (int)$p['Package_ID']; ?>">
+                <?php echo htmlspecialchars($p['Name']); ?>
+              </option>
+            <?php endforeach; ?>
           </select>
         </div>
         <div class="filter-item">
           <i class="fa fa-bicycle"></i>
-          <select>
-            <option>Activity</option>
-            <option>Adventure</option>
-            <option>Relaxation</option>
-            <option>Culture</option>
-          </select>
+          <input id="pkgSubtitle" type="text" placeholder="Title" readonly />
         </div>
         <div class="filter-item">
           <i class="fa fa-clock-o"></i>
-          <select>
-            <option>3 Days - 6 Days</option>
-            <option>7 Days - 10 Days</option>
-            <option>10+ Days</option>
-          </select>
+          <input id="pkgDuration" type="text" placeholder="Duration" readonly />
         </div>
         <div class="filter-item">
           <i class="fa fa-money"></i>
-          <select>
-            <option>LKR20,000 - LKR50,000</option>
-            <option>LKR9,000 - LKR10,000</option>
-            <option>LKR10,000+</option>
-          </select>
+          <input id="pkgPrice" type="text" placeholder="Price" readonly />
         </div>
-        <button class="search-btn">Search</button>
+        <button class="search-btn" id="pkgSearchBtn">Search</button>
       </div>
     </section>
 
@@ -122,14 +112,14 @@ if ($pkg_res = $conn->query($pkg_sql)) {
       <div class="carousel-container">
         <div class="tour-carousel">
           <div class="tour-card">
-            <img src="Images/Cultural Tours.jpg" alt="Cultural">
+            <img src="Images/Cultural Tours.jpeg" alt="Cultural">
             <div class="tour-card-content">
               <h3>🧭 Cultural Tours</h3>
               <p>Historical sites, ancient cities, temples, local traditions.</p>
             </div>
           </div>
           <div class="tour-card">
-            <img src="Images/Adventure.webp" alt="Adventure">
+            <img src="Images/Adventure Tours.webp" alt="Adventure">
             <div class="tour-card-content">
               <h3>🏞 Adventure Tours</h3>
               <p>Hiking, rafting, surfing, rock climbing, wildlife safaris.</p>
@@ -184,7 +174,7 @@ if ($pkg_res = $conn->query($pkg_sql)) {
                     ?>
                   </p>
                   <p class="package-price">From <span>
-                    Rs.<?php echo number_format((float)$p['Price'], 2); ?>
+                    $USD.<?php echo number_format((float)$p['Price'], 2); ?>
                   </span></p>
                 </div>
 
@@ -210,12 +200,10 @@ if ($pkg_res = $conn->query($pkg_sql)) {
       <div class="carousel-dots" id="pkgDots" hidden></div>
     </section>
 
-    <section class="s6"></section>
-    <section class="s6"></section>
 
     <?php include __DIR__ . '/Includes/footer.php'; ?>
   </main>
-
+<?php include __DIR__ . '/Includes/message.php'; ?>
   <script>
     const featureItems = document.querySelectorAll(".feature-item");
     const observerInfo = new IntersectionObserver((entries) => {
@@ -298,5 +286,57 @@ if ($pkg_res = $conn->query($pkg_sql)) {
       window.addEventListener('load', refresh);
     })();
   </script>
+
+  <script>
+    (function() {
+      const pkgSelect = document.getElementById('pkgSelect');
+      const subtitleEl = document.getElementById('pkgSubtitle');
+      const durationEl = document.getElementById('pkgDuration');
+      const priceEl = document.getElementById('pkgPrice');
+      const searchBtn = document.getElementById('pkgSearchBtn');
+
+      const data = <?php
+        $reduced = array_map(function($p){
+          return [
+            'id' => (int)$p['Package_ID'],
+            'name' => (string)$p['Name'],
+            'subtitle' => isset($p['Subtitle']) ? (string)$p['Subtitle'] : '',
+            'duration' => (int)$p['DurationDays'],
+            'price' => (float)$p['Price']
+          ];
+        }, $packages);
+        echo json_encode($reduced, JSON_UNESCAPED_UNICODE);
+      ?>;
+
+      const map = {};
+      for (const p of data) map[p.id] = p;
+
+      function fill(id) {
+        if (!id || !map[id]) {
+          subtitleEl.value = '';
+          durationEl.value = '';
+          priceEl.value = '';
+          return;
+        }
+        const p = map[id];
+        subtitleEl.value = p.subtitle || '';
+        durationEl.value = p.duration ? (p.duration + ' Days') : '';
+        priceEl.value = p.price !== undefined ? ('USD $' + Number(p.price).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})) : '';
+      }
+
+      pkgSelect.addEventListener('change', function() {
+        const id = this.value ? parseInt(this.value, 10) : 0;
+        fill(id);
+      });
+
+      searchBtn.addEventListener('click', function() {
+        const id = pkgSelect.value ? parseInt(pkgSelect.value, 10) : 0;
+        if (id) {
+          window.location.href = 'Package_Info.php?id=' + id;
+        }
+      });
+    })();
+  </script>
+  
 </body>
 </html>

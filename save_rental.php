@@ -1,64 +1,68 @@
 <?php
-header('Content-Type: application/json');
 session_start();
-
-$host = "localhost";
-$user = "root";
-$pass = "";
-$dbname = "explore_ceylon_db";
-
-$conn = new mysqli($host, $user, $pass, $dbname);
-if ($conn->connect_error) {
-    echo json_encode(["status"=>"error", "message"=>"DB Connection Failed"]);
+require_once __DIR__ . '/Includes/config.php';
+require_once __DIR__ . '/Includes/dbconnect.php';
+require_once __DIR__ . '/Includes/stripe.php';
+if (!isset($_SESSION['User_ID'])) {
+    header('Location: login.php');
     exit;
 }
-
-$category       = $_POST['Category']; // comes from modal
-$name           = $_POST['Name'];
-$email          = $_POST['Email'];
-$nic_or_pass    = $_POST['NIC_or_Pass'];
-$phone_no       = $_POST['Phone_No'];
-$start_date     = $_POST['Start_Date'];
-$end_date       = $_POST['End_Date'];
-$start_location = $_POST['Start_Location'];
-
-$user_id = 1; // Replace with session login later
-
-// 🔎 Find first available vehicle in the selected category
-$sql = "SELECT v.Vehicle_ID 
-        FROM vehicle v
-        WHERE v.Category = ?
-        AND v.Vehicle_ID NOT IN (
-            SELECT vr.Vehicle_ID FROM vehicle_rentals vr
-            WHERE NOT (vr.End_Date < ? OR vr.Start_Date > ?)
-        )
-        LIMIT 1";
-
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("sss", $category, $start_date, $end_date);
-$stmt->execute();
-$res = $stmt->get_result();
-
-if ($res->num_rows === 0) {
-    echo json_encode(["status"=>"error", "message"=>"❌ No $category available for selected dates"]);
+use Stripe\Stripe;
+use Stripe\Checkout\Session;
+if (isset($_GET['cancel'])) {
+    unset($_SESSION['rental_data']);
+    $_SESSION['rv_flash'] = 'cancel';
+    header('Location: rent_vehicle.php');
     exit;
 }
-
-$vehicle = $res->fetch_assoc();
-$vehicle_id = $vehicle['Vehicle_ID'];
-
-// ✅ Insert booking
-$sql = "INSERT INTO vehicle_rentals 
-        (Name, Email, NIC_or_Pass, Phone_No, Start_Date, End_Date, Start_Location, Vehicle_ID, User_ID)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("sssssssii", $name, $email, $nic_or_pass, $phone_no, $start_date, $end_date, $start_location, $vehicle_id, $user_id);
-
-if($stmt->execute()){
-    echo json_encode(["status"=>"success", "message"=>"✅ Booking Confirmed!"]);
-} else {
-    echo json_encode(["status"=>"error", "message"=>"⚠️ Error: ".$stmt->error]);
+if (isset($_GET['session_id']) && isset($_SESSION['rental_data'])) {
+    Stripe::setApiKey(STRIPE_SECRET_KEY);
+    try {
+        $session = Session::retrieve($_GET['session_id']);
+    } catch (Exception $e) {
+        unset($_SESSION['rental_data']);
+        $_SESSION['rv_flash'] = 'error';
+        header('Location: rent_vehicle.php');
+        exit;
+    }
+    if ($session && $session->payment_status === 'paid') {
+        $d = $_SESSION['rental_data'];
+        $uid = (int)$_SESSION['User_ID'];
+        $stmt = $conn->prepare("
+            INSERT INTO vehicle_rentals
+            (Name, Email, NIC_or_Pass, Phone_No, Start_Date, End_Date, Start_Location, Payment_method, Payment_Status, Status, Vehicle_ID, User_ID)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'Online', 'Paid', 'Pendding', ?, ?)
+        ");
+        if ($stmt) {
+            $stmt->bind_param(
+                "sssssssii",
+                $d['Name'],
+                $d['Email'],
+                $d['NIC_or_Pass'],
+                $d['Phone_No'],
+                $d['Start_Date'],
+                $d['End_Date'],
+                $d['Start_Location'],
+                $d['Vehicle_ID'],
+                $uid
+            );
+            if ($stmt->execute()) {
+                $_SESSION['rv_flash'] = 'success';
+            } else {
+                $_SESSION['rv_flash'] = 'error';
+            }
+            $stmt->close();
+        } else {
+            $_SESSION['rv_flash'] = 'error';
+        }
+        unset($_SESSION['rental_data']);
+    } else {
+        unset($_SESSION['rental_data']);
+        $_SESSION['rv_flash'] = 'error';
+    }
+    header('Location: rent_vehicle.php');
+    exit;
 }
-
-$stmt->close();
-$conn->close();
+$_SESSION['rv_flash'] = 'error';
+header('Location: rent_vehicle.php');
+exit;
