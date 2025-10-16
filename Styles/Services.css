@@ -1,0 +1,158 @@
+.Service-header {
+    background: linear-gradient(135deg, #008c73, #3ddc97);
+    color: white;
+    text-align: center;
+    padding: 60px 20px;
+}
+.Service-header h1 {
+    font-size: 3em;
+    letter-spacing: 2px;
+    margin: 0;
+}
+.Service-header p {
+    font-size: 1.2em;
+    margin-top: 10px;
+}
+section {
+    max-width: 1200px;
+    margin: 60px auto;
+    padding: 0 20px;
+}
+.service-section h2 {
+    text-align: center;
+    font-size: 2.5em;
+    color: #008c73;
+    margin-bottom: 40px;
+    position: relative;
+}
+.service-section h2::after {
+    content: "";
+    width: 100px;
+    height: 4px;
+    background: #3ddc97;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -10px;
+    border-radius: 2px;
+}
+.service-card {
+    background: #fff;
+    border-radius: 20px;
+    overflow: hidden;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    transition: all 0.4s ease;
+    margin-bottom: 30px;
+}
+.service-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 12px 25px rgba(0,0,0,0.15);
+}
+.service-card img {
+    width: 100%;
+    height: 320px;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+.service-card:hover img {
+    transform: scale(1.05);
+}
+.service-content {
+    padding: 25px;
+}
+.service-card h3 {
+    font-size: 1.5em;
+    color: #008c73;
+    margin-bottom: 10px;
+}
+.service-card p {
+    font-size: 0.95em;
+    line-height: 1.6em;
+    color: #555;
+    margin-bottom: 15px;
+}
+.service-card a {
+    display: inline-block;
+    padding: 10px 20px;
+    width: 230px;
+    background: #3ddc97;
+    color: #fff;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+.service-card a:hover {
+    background: #008c73;
+}
+.external {
+    background: #eafaf3;
+    padding: 60px 20px;
+    border-radius: 20px;
+    margin-top: 70px;
+}
+.emergency-card {
+    background: #fff;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin-top: 40px;
+}
+.emergency-card img {
+    width: 100%;
+    height: 400px;
+    object-fit: cover;
+}
+.emergency-card .service-content {
+    padding: 25px;
+}
+.emergency-card h3 {
+    text-align: center;
+    color: #008c73;
+    font-size: 1.8em;
+    margin-bottom: 20px;
+}
+
+/* 🌟 Enhanced Emergency Table Styling */
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 1em;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+}
+table:hover {
+    box-shadow: 0 6px 25px rgba(0,140,115,0.25);
+}
+th {
+    background: linear-gradient(135deg, #09ceaaff, #3ddc97);
+    color: #fff;
+    text-align: center;
+    padding: 14px;
+    font-size: 1.1em;
+    letter-spacing: 0.5px;
+}
+td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    transition: background 0.3s ease;
+}
+tr:nth-child(even) {
+    background-color: #f9fdfb;
+}
+tr:hover td {
+    background-color: #eafaf3;
+}
+table td:first-child {
+    font-weight: 600;
+    color: #008c73;
+}
+table td:last-child {
+    text-align: center;
+    font-weight: 500;
+    color: #333;
+}
