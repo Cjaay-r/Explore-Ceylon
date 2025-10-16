@@ -6,29 +6,62 @@ require_once __DIR__ . '/Includes/dbconnect.php';
 require_once __DIR__ . '/Includes/auth.php';
 require_once __DIR__ . '/Includes/stripe.php';
 
-if (!function_exists('isLoggedIn') ? !isset($_SESSION['User_ID']) : !isLoggedIn()) {
-  header('Location: ' . (function_exists('url') ? url('login.php') : 'login.php'));
-  exit;
-}
-
-$uid = (int)$_SESSION['User_ID'];
+$uid = isset($_SESSION['User_ID']) ? (int)$_SESSION['User_ID'] : 0;
+$requireLogin = (!function_exists('isLoggedIn') ? !$uid : !isLoggedIn());
 $redirectUrl = function_exists('url') ? url('packages.php') : 'packages.php';
 $APP_BASE = 'http://localhost/ceylon';
 
 function vehicle_caps() { return ["Bike"=>1,"Tuk-Tuk"=>2,"Mini-Car"=>3,"Car"=>4,"Van"=>7,"Bus"=>30]; }
 function allowed_cats($heads) { $out=[]; foreach (vehicle_caps() as $k=>$v) if ($v >= $heads) $out[$k]=$v; return $out; }
+
 function have_overlap($conn, $col, $id, $start, $end) {
   $q = $conn->prepare("SELECT 1 FROM bookings WHERE $col=? AND Status NOT IN ('Cancelled','Completed') AND NOT (End_Date_Time < ? OR Start_Date_Time > ?) LIMIT 1");
   $q->bind_param("iss", $id, $start, $end);
   $q->execute(); $r=$q->get_result(); $q->close();
   return $r && $r->num_rows > 0;
 }
+
+function resolve_profile_img_public($raw) {
+  $raw = (string)$raw;
+  if ($raw !== '') {
+    if (preg_match('~^https?://~', $raw) || str_starts_with($raw, '/')) {
+      return $raw;
+    }
+    if (strpos($raw, 'uploads/UserProfiles') !== false) {
+      return ltrim($raw, '/');
+    }
+    return 'uploads/UserProfiles/' . ltrim($raw, '/');
+  }
+  return 'uploads/UserProfiles/defaultuser.jpg';
+}
+
+function guide_languages_list($conn, $gid){
+  $langs = [];
+  $st = @$conn->prepare("SELECT Language FROM languages WHERE Guide_ID=?");
+  if ($st) {
+    $st->bind_param("i",$gid);
+    if ($st->execute()) {
+      $rs = $st->get_result();
+      while($row = $rs->fetch_assoc()){ $langs[] = trim((string)$row['Language']); }
+    }
+    $st->close();
+  }
+  if (!$langs) {
+    $st2 = @$conn->prepare("SELECT Language FROM guide_languages WHERE Guide_ID=?");
+    if ($st2) {
+      $st2->bind_param("i",$gid);
+      if ($st2->execute()) {
+        $rs2 = $st2->get_result();
+        while($row = $rs2->fetch_assoc()){ $langs[] = trim((string)$row['Language']); }
+      }
+      $st2->close();
+    }
+  }
+  return implode(', ', array_filter($langs));
+}
+
 function pick_driver($conn, $vehicleCat, $start, $end) {
-  $sql = "SELECT d.Driver_ID AS did
-          FROM driver d
-          WHERE d.Status='Available'
-            AND REPLACE(REPLACE(d.Vehicle_Category,'-',' '),'_',' ') = REPLACE(REPLACE(?,'-',' '),'_',' ')
-          ORDER BY d.Driver_ID ASC";
+  $sql = "SELECT d.Driver_ID AS did FROM driver d WHERE d.Status='Available' AND REPLACE(REPLACE(d.Vehicle_Category,'-',' '),'_',' ') = REPLACE(REPLACE(?,'-',' '),'_',' ') ORDER BY d.Driver_ID ASC";
   $ds = $conn->prepare($sql);
   if ($ds === false) return 0;
   $ds->bind_param("s", $vehicleCat);
@@ -45,7 +78,7 @@ function pick_driver($conn, $vehicleCat, $start, $end) {
 $packageId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $package = null; $itinerary = [];
 if ($packageId > 0) {
-  $ps = $conn->prepare("SELECT Package_ID, Name, Subtitle, Long_Des, DurationDays, Price, Root_img FROM packages WHERE Package_ID=?");
+  $ps = $conn->prepare("SELECT Package_ID, Name, Subtitle, Long_Des, DurationDays, Price, Root_img, IFNULL(Guide_Percentage,0) AS Guide_Percentage, IFNULL(Driver_Percentage,0) AS Driver_Percentage FROM packages WHERE Package_ID=?");
   $ps->bind_param("i", $packageId);
   $ps->execute();
   $package = $ps->get_result()->fetch_assoc();
@@ -74,30 +107,21 @@ if (isset($_GET['action']) && $_GET['action']==='guides') {
   $ed = clone $sd; $ed->modify(((int)$pkg['DurationDays'] - 1) . " days"); $end = $ed->format('Y-m-d');
 
   $html = "";
-  $gs = $conn->prepare("
-    SELECT g.Guide_ID, g.F_Name, g.L_Name, g.Rating, u.User_Profile
-    FROM guide g
-    LEFT JOIN user u ON u.User_ID = g.User_ID
-    WHERE g.Status='Available'
-      AND NOT EXISTS (
-        SELECT 1 FROM bookings b
-        WHERE b.Guide_ID = g.Guide_ID
-          AND b.Status NOT IN ('Cancelled','Completed')
-          AND NOT (b.End_Date_Time < ? OR b.Start_Date_Time > ?)
-      )
-    ORDER BY CAST(NULLIF(g.Rating,'') AS DECIMAL(10,2)) DESC, g.Guide_ID ASC
-  ");
+  $gs = $conn->prepare("SELECT g.Guide_ID, g.F_Name, g.L_Name, g.Rating, g.Description, g.Price_per_Day, u.User_Profile FROM guide g LEFT JOIN user u ON u.User_ID = g.User_ID WHERE g.Status='Available' AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.Guide_ID = g.Guide_ID AND b.Status NOT IN ('Cancelled','Completed') AND NOT (b.End_Date_Time < ? OR b.Start_Date_Time > ?)) ORDER BY CAST(NULLIF(g.Rating,'') AS DECIMAL(10,2)) DESC, g.Guide_ID ASC");
   $gs->bind_param("ss", $start, $end);
   $gs->execute();
   $res = $gs->get_result();
   while ($g = $res->fetch_assoc()) {
     $full = trim(($g['F_Name']??"")." ".($g['L_Name']??""));
-    $imgRaw = $g['User_Profile'] ?: 'Images/defaultuser.jpg';
-    $img = htmlspecialchars(function_exists('url') ? url($imgRaw) : $imgRaw);
+    $imgPath = resolve_profile_img_public($g['User_Profile'] ?? '');
+    $img = htmlspecialchars(function_exists('url') ? url($imgPath) : $imgPath);
     $name = htmlspecialchars($full ?: ("Guide #".$g['Guide_ID']));
     $rate = htmlspecialchars((string)($g['Rating'] ?? '0'));
+    $desc = htmlspecialchars((string)($g['Description'] ?? ''));
+    $ppd = number_format((float)($g['Price_per_Day'] ?? 0), 2);
+    $langs = htmlspecialchars(guide_languages_list($conn, (int)$g['Guide_ID']));
     $id = (int)$g['Guide_ID'];
-    $html .= '<label class="guide-card"><input type="radio" name="Guide_ID" value="'.$id.'"><div class="gc-body"><img src="'.$img.'" alt="Guide" class="gc-avatar"><div class="gc-meta"><div class="gc-name">'.$name.'</div><div class="gc-rating">⭐ '.$rate.'</div></div></div></label>';
+    $html .= '<label class="guide-card" role="radio" aria-checked="false"><input type="radio" name="Guide_ID" value="'.$id.'"><span class="gc-selected" aria-hidden="true">Selected ✓</span><div class="gc-body"><img src="'.$img.'" alt="Guide" class="gc-avatar"><div class="gc-meta"><div class="gc-name">'.$name.'</div><div class="gc-rating">⭐ '.$rate.' • $ '.$ppd.'/day</div><div class="gc-desc">'.$desc.'</div><div class="gc-langs">'.($langs!==''?$langs:'').'</div></div></div></label>';
   }
   $gs->close();
   ob_clean(); echo json_encode(["ok"=>true,"html"=>$html]); exit;
@@ -108,82 +132,63 @@ $flash_err = '';
 
 if (isset($_GET['paid']) && $_GET['paid']=='1' && isset($_GET['tok']) && isset($_SESSION['pkg_pay_token']) && hash_equals($_SESSION['pkg_pay_token'], $_GET['tok'])) {
   if (!empty($_SESSION['pending_pkg_form'])) {
-    $pf = $_SESSION['pending_pkg_form'];
-    $packageId = (int)($pf['Package_ID'] ?? 0);
-    $f = trim($pf['F_Name'] ?? "");
-    $l = trim($pf['L_Name'] ?? "");
-    $email = trim($pf['Email'] ?? "");
-    $phone = trim($pf['Phone_No'] ?? "");
-    $nic = trim($pf['NIC_or_Paasport'] ?? "");
-    $pickup = trim($pf['Pickup_Location'] ?? "");
-    $drop = trim($pf['End_Location'] ?? "");
-    $startDate = $pf['Start_Date_Time'] ?? "";
-    $people = (int)($pf['Number_of_People'] ?? 1);
-    $chosenGuideId = (int)($pf['Guide_ID'] ?? 0);
-    $chosenVehicle = trim($pf['Vehicle_Category'] ?? "");
+    if ($requireLogin) { $flash_err = "Please log in to continue."; }
+    else {
+      $pf = $_SESSION['pending_pkg_form'];
+      $packageId = (int)($pf['Package_ID'] ?? 0);
+      $f = trim($pf['F_Name'] ?? "");
+      $l = trim($pf['L_Name'] ?? "");
+      $email = trim($pf['Email'] ?? "");
+      $phone = trim($pf['Phone_No'] ?? "");
+      $nic = trim($pf['NIC_or_Paasport'] ?? "");
+      $pickup = trim($pf['Pickup_Location'] ?? "");
+      $drop = trim($pf['End_Location'] ?? "");
+      $startDate = $pf['Start_Date_Time'] ?? "";
+      $people = (int)($pf['Number_of_People'] ?? 1);
+      $chosenGuideId = (int)($pf['Guide_ID'] ?? 0);
+      $chosenVehicle = trim($pf['Vehicle_Category'] ?? "");
 
-    $ps = $conn->prepare("SELECT DurationDays, Price FROM packages WHERE Package_ID=?");
-    $ps->bind_param("i", $packageId);
-    $ps->execute();
-    $pkg = $ps->get_result()->fetch_assoc();
-    $ps->close();
+      $ps = $conn->prepare("SELECT DurationDays, Price, IFNULL(Guide_Percentage,0) AS Guide_Percentage, IFNULL(Driver_Percentage,0) AS Driver_Percentage FROM packages WHERE Package_ID=?");
+      $ps->bind_param("i", $packageId);
+      $ps->execute();
+      $pkg = $ps->get_result()->fetch_assoc();
+      $ps->close();
 
-    if ($pkg) {
-      $duration = (int)$pkg['DurationDays'];
-      $price = (float)$pkg['Price'];
-      $sd = DateTime::createFromFormat('Y-m-d', $startDate);
-      if ($sd) {
-        $ed = clone $sd; $ed->modify(($duration - 1) . " days"); $endDate = $ed->format('Y-m-d');
-        $totalHeads = max(1,$people) + 1;
-        $allowed = allowed_cats($totalHeads);
-        if (isset($allowed[$chosenVehicle]) && $chosenGuideId>0 && !have_overlap($conn,"Guide_ID",$chosenGuideId,$startDate,$endDate)) {
-          $driverId = pick_driver($conn, $chosenVehicle, $startDate, $endDate);
-          if ($driverId!==0 && !have_overlap($conn,"Driver_ID",$driverId,$startDate,$endDate)) {
-            $bp = $conn->prepare("
-              INSERT INTO bookings
-                (F_Name, L_Name, Email, Phone_No, NIC_or_Paasport, Start_Date_Time, End_Date_Time, Pickup_Location, End_Location,
-                 Number_of_People, Booking_Type, Guide_Preferences, Status, Completed_At, Price, Payment_Method, Payment_Status,
-                 Driver_earning, Guide_earning, User_ID, Driver_ID, Guide_ID, Package_ID)
-              VALUES
-                (?,?,?,?,?,?,?,?,?,?,'Package',?,'Pending',?, ?, 'Online', 'Paid', 0, 0, ?, ?, ?, ?)
-            ");
-            if ($bp) {
-              $guidePref = 1;
-              $completedAt = '0000-00-00 00:00:00';
-              $priceVal = (int)round($price);
-              $types = "sssssssssiisiiiii";
-              $bp->bind_param(
-                $types,
-                $f,$l,$email,$phone,$nic,$startDate,$endDate,$pickup,$drop,$people,
-                $guidePref,$completedAt,$priceVal,
-                $uid,$driverId,$chosenGuideId,$packageId
-              );
-              if ($bp->execute()) {
-                $ref = $bp->insert_id;
-                $flash_ok = "Booking confirmed. Reference #".$ref.".";
-                unset($_SESSION['pending_pkg_form'], $_SESSION['pending_pkg_price'], $_SESSION['pkg_pay_token']);
-              } else {
-                $flash_err = "Failed to save booking.";
-              }
-              $bp->close();
-            } else {
-              $flash_err = "Failed to prepare booking statement.";
-            }
-          } else {
-            $flash_err = "Driver is busy or unavailable.";
-          }
-        } else {
-          $flash_err = "Validation failed for selected options.";
-        }
-      } else {
-        $flash_err = "Invalid start date.";
-      }
-    } else {
-      $flash_err = "Invalid package.";
+      if ($pkg) {
+        $duration = (int)$pkg['DurationDays'];
+        $price = (float)$pkg['Price'];
+        $gp = (float)$pkg['Guide_Percentage'];
+        $dp = (float)$pkg['Driver_Percentage'];
+        $sd = DateTime::createFromFormat('Y-m-d', $startDate);
+        if ($sd) {
+          $ed = clone $sd; $ed->modify(($duration - 1) . " days"); $endDate = $ed->format('Y-m-d');
+          $totalHeads = max(1,$people) + 1;
+          $allowed = allowed_cats($totalHeads);
+          if (isset($allowed[$chosenVehicle]) && $chosenGuideId>0 && !have_overlap($conn,"Guide_ID",$chosenGuideId,$startDate,$endDate)) {
+            $driverId = pick_driver($conn, $chosenVehicle, $startDate, $endDate);
+            if ($driverId!==0 && !have_overlap($conn,"Driver_ID",$driverId,$startDate,$endDate)) {
+              $bp = $conn->prepare("INSERT INTO bookings (F_Name, L_Name, Email, Phone_No, NIC_or_Paasport, Start_Date_Time, End_Date_Time, Pickup_Location, End_Location, Number_of_People, Booking_Type, Guide_Preferences, Status, Completed_At, Price, Payment_Method, Payment_Status, Driver_earning, Guide_earning, User_ID, Driver_ID, Guide_ID, Package_ID) VALUES (?,?,?,?,?,?,?,?,?,?,'Package',?,'Pending',?, ?, 'Online', 'Paid', ?, ?, ?, ?, ?, ?)");
+              if ($bp) {
+                $guidePref = 1;
+                $completedAt = '0000-00-00 00:00:00';
+                $priceVal = (int)round($price);
+                $driverEarn = (int)round($priceVal * $dp / 100);
+                $guideEarn  = (int)round($priceVal * $gp / 100);
+                $types = "sssssssssiisiiiiiii";
+                $bp->bind_param($types,$f,$l,$email,$phone,$nic,$startDate,$endDate,$pickup,$drop,$people,$guidePref,$completedAt,$priceVal,$driverEarn,$guideEarn,$uid,$driverId,$chosenGuideId,$packageId);
+                if ($bp->execute()) {
+                  $ref = $bp->insert_id;
+                  $flash_ok = "Booking confirmed. Reference #".$ref.".";
+                  unset($_SESSION['pending_pkg_form'], $_SESSION['pending_pkg_price'], $_SESSION['pkg_pay_token']);
+                } else { $flash_err = "Failed to save booking."; }
+                $bp->close();
+              } else { $flash_err = "Failed to prepare booking statement."; }
+            } else { $flash_err = "Driver is busy or unavailable."; }
+          } else { $flash_err = "Validation failed for selected options."; }
+        } else { $flash_err = "Invalid start date."; }
+      } else { $flash_err = "Invalid package."; }
     }
-  } else {
-    $flash_err = "Session expired. Please fill the form again.";
-  }
+  } else { $flash_err = "Session expired. Please fill the form again."; }
 }
 
 if ($_SERVER['REQUEST_METHOD']==='POST') {
@@ -193,6 +198,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
     if ($isAjax) { header('Content-Type: application/json'); ob_clean(); echo json_encode($arr); exit; }
     header('Location: '.($arr['redirect'] ?? $redirectUrl)); exit;
   };
+  if ($requireLogin) { $out(["ok"=>false,"msg"=>"Please log in to continue.","redirect"=>$redirectUrl]); }
 
   $packageId = (int)($_POST['Package_ID'] ?? 0);
   $f = trim($_POST['F_Name'] ?? "");
@@ -208,7 +214,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   $chosenVehicle = trim($_POST['Vehicle_Category'] ?? "");
   $payMethod = ($_POST['Payment_Method'] ?? 'Cash') === 'Online' ? 'Online' : 'Cash';
 
-  $ps = $conn->prepare("SELECT DurationDays, Price FROM packages WHERE Package_ID=?");
+  $ps = $conn->prepare("SELECT DurationDays, Price, IFNULL(Guide_Percentage,0) AS Guide_Percentage, IFNULL(Driver_Percentage,0) AS Driver_Percentage FROM packages WHERE Package_ID=?");
   $ps->bind_param("i", $packageId);
   $ps->execute();
   $pkg = $ps->get_result()->fetch_assoc();
@@ -216,6 +222,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   if (!$pkg) { $out(["ok"=>false,"msg"=>"Invalid package.","redirect"=>$redirectUrl]); }
   $duration = (int)$pkg['DurationDays'];
   $price = (float)$pkg['Price'];
+  $gp = (float)$pkg['Guide_Percentage'];
+  $dp = (float)$pkg['Driver_Percentage'];
 
   $sd = DateTime::createFromFormat('Y-m-d', $startDate);
   if (!$sd) { $out(["ok"=>false,"msg"=>"Invalid start date.","redirect"=>$redirectUrl]); }
@@ -231,25 +239,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   if (have_overlap($conn,"Driver_ID",$driverId,$startDate,$endDate)) { $out(["ok"=>false,"msg"=>"Driver is busy for these dates. Please change dates or vehicle.","redirect"=>$redirectUrl]); }
 
   if ($payMethod === 'Cash') {
-    $bp = $conn->prepare("
-      INSERT INTO bookings
-        (F_Name, L_Name, Email, Phone_No, NIC_or_Paasport, Start_Date_Time, End_Date_Time, Pickup_Location, End_Location,
-         Number_of_People, Booking_Type, Guide_Preferences, Status, Completed_At, Price, Payment_Method, Payment_Status,
-         Driver_earning, Guide_earning, User_ID, Driver_ID, Guide_ID, Package_ID)
-      VALUES
-        (?,?,?,?,?,?,?,?,?,?,'Package',?,'Pending',?, ?, 'Cash', 'Unpaid', 0, 0, ?, ?, ?, ?)
-    ");
+    $bp = $conn->prepare("INSERT INTO bookings (F_Name, L_Name, Email, Phone_No, NIC_or_Paasport, Start_Date_Time, End_Date_Time, Pickup_Location, End_Location, Number_of_People, Booking_Type, Guide_Preferences, Status, Completed_At, Price, Payment_Method, Payment_Status, Driver_earning, Guide_earning, User_ID, Driver_ID, Guide_ID, Package_ID) VALUES (?,?,?,?,?,?,?,?,?,?,'Package',?,'Pending',?, ?, 'Cash', 'Unpaid', ?, ?, ?, ?, ?, ?)");
     if ($bp === false) { $out(["ok"=>false,"msg"=>"Failed to prepare booking statement.","redirect"=>$redirectUrl]); }
     $guidePref = 1;
     $completedAt = '0000-00-00 00:00:00';
     $priceVal = (int)round($price);
-    $types = "sssssssssiisiiiii";
-    $bp->bind_param(
-      $types,
-      $f,$l,$email,$phone,$nic,$startDate,$endDate,$pickup,$drop,$people,
-      $guidePref,$completedAt,$priceVal,
-      $uid,$driverId,$chosenGuideId,$packageId
-    );
+    $driverEarn = (int)round($priceVal * $dp / 100);
+    $guideEarn  = (int)round($priceVal * $gp / 100);
+    $types = "sssssssssiisiiiiiii";
+    $bp->bind_param($types,$f,$l,$email,$phone,$nic,$startDate,$endDate,$pickup,$drop,$people,$guidePref,$completedAt,$priceVal,$driverEarn,$guideEarn,$uid,$driverId,$chosenGuideId,$packageId);
     if ($bp->execute()) {
       $ref = $bp->insert_id;
       $out(["ok"=>true,"msg"=>"Booking confirmed (Unpaid). Reference #".$ref.".","redirect"=>$redirectUrl]);
@@ -274,12 +272,14 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
 }
 
 $guides = [];
-$gr = $conn->query("SELECT g.Guide_ID, g.F_Name, g.L_Name, g.Rating, u.User_Profile FROM guide g LEFT JOIN user u ON u.User_ID=g.User_ID WHERE g.Status='Available' ORDER BY CAST(NULLIF(g.Rating,'') AS DECIMAL(10,2)) DESC, g.Guide_ID ASC");
+$gr = $conn->query("SELECT g.Guide_ID, g.F_Name, g.L_Name, g.Rating, g.Description, g.Price_per_Day, u.User_Profile FROM guide g LEFT JOIN user u ON u.User_ID=g.User_ID WHERE g.Status='Available' ORDER BY CAST(NULLIF(g.Rating,'') AS DECIMAL(10,2)) DESC, g.Guide_ID ASC");
 if ($gr) { while ($g = $gr->fetch_assoc()) $guides[] = $g; }
 
 $prefill = [
   'Package_ID' => $packageId,
-  'F_Name' => '', 'L_Name' => '', 'Email' => '', 'Phone_No' => '', 'NIC_or_Paasport' => '',
+  'F_Name' => '', 'L_Name' => '', 'Email' => '',
+  'Phone_No' => '',
+  'NIC_or_Paasport' => '',
   'Pickup_Location' => '', 'End_Location' => '', 'Start_Date_Time' => '',
   'Number_of_People' => '1', 'Vehicle_Category' => '', 'Guide_ID' => '', 'Payment_Method' => 'Cash'
 ];
@@ -294,14 +294,21 @@ if (!empty($_SESSION['pending_pkg_form'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Book Package</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="Styles/booking_package.css">
+  <link rel="stylesheet" href="Styles/bookingPackage.css">
   <style>
     .guide-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.6rem}
-    .guide-card{border:1px solid #e9ecef;border-radius:.75rem;cursor:pointer}
-    .guide-card input{display:none}
+    .guide-card{position:relative;border:1px solid #e9ecef;border-radius:.75rem;cursor:pointer;transition:box-shadow .2s,background-color .2s,border-color .2s}
+    .guide-card input{position:absolute;inset:0;margin:0;opacity:0;cursor:pointer}
     .gc-body{display:flex;gap:.6rem;padding:.6rem}
     .gc-avatar{width:44px;height:44px;border-radius:999px;object-fit:cover}
     .gc-meta .gc-name{font-weight:600}
+    .gc-meta .gc-desc{font-size:.9rem;color:#6c757d;line-height:1.35;margin-top:.2rem}
+    .gc-meta .gc-langs{font-size:.85rem;color:#495057;margin-top:.15rem}
+    .gc-selected{position:absolute;top:.5rem;right:.5rem;display:none;padding:.15rem .4rem;border-radius:999px;font-size:.75rem;background:#0d6efd;color:#fff}
+    .guide-card:has(input:checked){border-color:#0d6efd;background:rgba(13,110,253,.05);box-shadow:0 0 0 3px rgba(13,110,253,.15)}
+    .guide-card:has(input:checked) .gc-selected{display:inline-flex}
+    .guide-card:has(input:focus-visible){outline:3px solid #0d6efd;outline-offset:2px}
+    .login-modal .modal-content{border:none;border-radius:14px}
   </style>
 </head>
 <body>
@@ -323,7 +330,7 @@ if (!empty($_SESSION['pending_pkg_form'])) {
             <div class="text-muted mb-2"><?= htmlspecialchars($package['Subtitle']) ?></div>
             <div class="d-flex flex-wrap gap-3 mb-3">
               <span class="badge bg-primary">Duration: <?= (int)$package['DurationDays'] ?> Days</span>
-              <span class="badge bg-success">Price: $<?= number_format((float)$package['Price'], 2) ?></span>
+              <span class="badge bg-success">Price: $ <?= number_format((float)$package['Price'], 2) ?></span>
             </div>
             <div class="row g-3 mb-3">
               <div class="col-12">
@@ -375,10 +382,12 @@ if (!empty($_SESSION['pending_pkg_form'])) {
                 <label class="form-label">Email</label>
                 <input type="email" name="Email" class="form-control" required value="<?= htmlspecialchars($prefill['Email']) ?>">
               </div>
+
               <div class="col-md-6">
                 <label class="form-label">Contact Number</label>
-                <input type="text" name="Phone_No" class="form-control" required value="<?= htmlspecialchars($prefill['Phone_No']) ?>">
+                <input type="text" name="Phone_No" class="form-control" value="<?= htmlspecialchars($prefill['Phone_No']) ?>">
               </div>
+
               <div class="col-12">
                 <label class="form-label">NIC / Passport</label>
                 <input type="text" name="NIC_or_Paasport" class="form-control" required value="<?= htmlspecialchars($prefill['NIC_or_Paasport']) ?>">
@@ -418,14 +427,20 @@ if (!empty($_SESSION['pending_pkg_form'])) {
                   <?php if (count($guides)===0): ?>
                     <div class="text-muted">No guides available.</div>
                   <?php else: ?>
-                    <?php foreach ($guides as $g): $full = trim(($g['F_Name']??"")." ".($g['L_Name']??"")); $imgRaw = $g['User_Profile'] ?: 'Images/defaultuser.jpg'; ?>
-                      <label class="guide-card">
+                    <?php foreach ($guides as $g):
+                      $full = trim(($g['F_Name']??"")." ".($g['L_Name']??""));
+                      $imgPath = resolve_profile_img_public($g['User_Profile'] ?? '');
+                      ?>
+                      <label class="guide-card" role="radio" aria-checked="false">
                         <input type="radio" name="Guide_ID" value="<?= (int)$g['Guide_ID'] ?>" <?= ($prefill['Guide_ID']==$g['Guide_ID'] ? 'checked':'') ?>>
+                        <span class="gc-selected" aria-hidden="true">Selected ✓</span>
                         <div class="gc-body">
-                          <img src="<?= htmlspecialchars(function_exists('url') ? url($imgRaw) : $imgRaw) ?>" alt="Guide" class="gc-avatar">
+                          <img src="<?= htmlspecialchars(function_exists('url') ? url($imgPath) : $imgPath) ?>" alt="Guide" class="gc-avatar">
                           <div class="gc-meta">
                             <div class="gc-name"><?= htmlspecialchars($full ?: "Guide #".$g['Guide_ID']) ?></div>
-                            <div class="gc-rating">⭐ <?= htmlspecialchars((string)($g['Rating'] ?? '0')) ?></div>
+                            <div class="gc-rating">⭐ <?= htmlspecialchars((string)($g['Rating'] ?? '0')) ?> • $ <?= number_format((float)($g['Price_per_Day'] ?? 0), 2) ?>/day</div>
+                            <div class="gc-desc"><?= htmlspecialchars((string)($g['Description'] ?? '')) ?></div>
+                            <div class="gc-langs"><?= htmlspecialchars(guide_languages_list($conn,(int)$g['Guide_ID'])) ?></div>
                           </div>
                         </div>
                       </label>
@@ -480,6 +495,18 @@ if (!empty($_SESSION['pending_pkg_form'])) {
     </div>
   </div>
 
+  <div class="modal fade login-modal" id="loginModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-body text-center py-4">
+        <h5 class="mb-2">Please log in to continue.</h5>
+        <div class="d-grid gap-2 mt-3">
+          <a href="<?= htmlspecialchars(function_exists('url') ? url('login.php') : 'login.php') ?>" class="btn btn-primary">Go to Login</a>
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
   <script>
     const durationDays = <?= $package ? (int)$package['DurationDays'] : 0 ?>;
     const startDateEl = document.getElementById('startDate');
@@ -491,6 +518,7 @@ if (!empty($_SESSION['pending_pkg_form'])) {
     const caps = {"Bike":1,"Tuk-Tuk":2,"Mini-Car":3,"Car":4,"Van":7,"Bus":30};
     const redirectUrl = "<?= htmlspecialchars($redirectUrl) ?>";
     const pkgId = <?= (int)$packageId ?>;
+    const requireLogin = <?= $requireLogin ? 'true' : 'false' ?>;
 
     function computeEndDate() {
       if (!startDateEl.value || durationDays <= 0) { endDateEl.value = ""; return; }
@@ -530,6 +558,12 @@ if (!empty($_SESSION['pending_pkg_form'])) {
     computeEndDate(); buildVehicleOptions();
 
     formEl?.addEventListener('submit', async (e)=>{
+      if (requireLogin) {
+        e.preventDefault();
+        const lm = new bootstrap.Modal(document.getElementById('loginModal'));
+        lm.show();
+        return;
+      }
       e.preventDefault();
       const fd = new FormData(formEl);
       let text = '';
@@ -542,7 +576,7 @@ if (!empty($_SESSION['pending_pkg_form'])) {
       const isStripe = data && data.redirect && /^https?:\/\/(?:checkout|pay)\.stripe\.com/i.test(String(data.redirect));
 
       if (data.ok && isStripe) {
-        window.location.href = data.redirect; // go to Stripe immediately for Online
+        window.location.href = data.redirect;
         return;
       }
 
@@ -580,6 +614,20 @@ if (!empty($_SESSION['pending_pkg_form'])) {
       computeEndDate();
       buildVehicleOptions();
       refreshGuides();
+      if (requireLogin) {
+        const lm = new bootstrap.Modal(document.getElementById('loginModal'));
+        lm.show();
+      }
+      guideList?.addEventListener('change', e=>{
+        const card = e.target?.closest('.guide-card');
+        document.querySelectorAll('.guide-card[role="radio"]').forEach(el=>{
+          el.setAttribute('aria-checked', el.querySelector('input')?.checked ? 'true' : 'false');
+        });
+        if (card) card.setAttribute('aria-checked','true');
+      });
+      document.querySelectorAll('.guide-card input:checked')?.forEach(inp=>{
+        inp.closest('.guide-card')?.setAttribute('aria-checked','true');
+      });
     });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
